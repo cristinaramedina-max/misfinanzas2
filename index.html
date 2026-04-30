@@ -667,7 +667,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font); min-h
 
 /* ── SPEND BUDGET CARDS ── */
 .spend-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(210px,1fr)); gap: 12px; margin-bottom: 16px; align-items: stretch; }
-.spend-card { background: var(--surface); border-radius: var(--r); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; }
+.spend-card { background: var(--surface); border-radius: var(--r); border: 1px solid var(--border); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
 .spend-card-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; }
 .spend-name { font-size: 14px; font-weight: 800; }
 .spend-pct { font-size: 20px; font-weight: 900; color: var(--purple-dark); }
@@ -2030,18 +2030,19 @@ function SpendingBudgets({ year, month, rate }) {
                   </div>
                 )}
 
-                <div className="spend-add">
+                <div style={{marginTop:'auto',paddingTop:8,display:'flex',flexDirection:'column',gap:4}}>
                   <input className="add-inp" type="text" placeholder="Descripción (opcional)"
-                    value={ef.note||''} style={{flex:1.5}}
+                    value={ef.note||''} style={{width:'100%',boxSizing:'border-box',fontSize:11}}
                     onChange={e=>setEntF(f=>({...f,[b.id]:{...ef,note:e.target.value}}))}
                     onKeyDown={e=>e.key==='Enter'&&addEntry(b.id)} />
-                  <input className="add-inp" type="number" placeholder="Monto" min="0"
-                    value={ef.amount} style={{width:80}}
-                    onChange={e=>setEntF(f=>({...f,[b.id]:{...ef,amount:e.target.value}}))}
-                    onKeyDown={e=>e.key==='Enter'&&addEntry(b.id)} />
-
-                  <CurToggle value={ef.currency||'ARS'} onChange={c=>setEntF(f=>({...f,[b.id]:{...ef,currency:c}}))} />
-                  <button className="add-btn" onClick={()=>addEntry(b.id)} style={{background:'var(--pink-dark)'}}>+</button>
+                  <div className="spend-add" style={{marginTop:0,paddingTop:0}}>
+                    <input className="add-inp" type="number" placeholder="Monto" min="0"
+                      value={ef.amount} style={{width:80}}
+                      onChange={e=>setEntF(f=>({...f,[b.id]:{...ef,amount:e.target.value}}))}
+                      onKeyDown={e=>e.key==='Enter'&&addEntry(b.id)} />
+                    <CurToggle value={ef.currency||'ARS'} onChange={c=>setEntF(f=>({...f,[b.id]:{...ef,currency:c}}))} />
+                    <button className="add-btn" onClick={()=>addEntry(b.id)} style={{background:'var(--pink-dark)'}}>+</button>
+                  </div>
                 </div>
               </div>
                 <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:6,textAlign:'center'}}>Límite: {fCur(b.limit,b.currency)}</div>
