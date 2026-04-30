@@ -1616,7 +1616,7 @@ function MovimientosTab({ year, month, rate }) {
 }
 
 /* ── SAVINGS GOALS ── */
-function SavingsGoals({ rate }) {
+function SavingsGoals({ rate, year, month }) {
   const [goals,   setGoals]  = useState(()=>gGoals());
   const [form,    setForm]   = useState({name:'',target:'',currency:'ARS'});
   const [depForms,setDep]    = useState({});
@@ -1666,12 +1666,18 @@ function SavingsGoals({ rate }) {
   };
 
   const addDeposit = (gid, type='dep') => {
-    const df = depForms[gid]||{amount:'',currency:'ARS'};
+    const df = depForms[gid]||{amount:'',currency:'ARS',desc:''};
     if(!df.amount||parseFloat(df.amount)<=0) return;
     const amt = type==='ret' ? -parseFloat(df.amount) : parseFloat(df.amount);
     const depDate = String(year)+'-'+String(month+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0');
-      save(goals.map(g=>g.id===gid?{...g,deposits:[...(g.deposits||[]),{id:uid(),amount:amt,currency:df.currency||'ARS',date:depDate}]}:g));
-    setDep(f=>({...f,[gid]:{amount:'',currency:df.currency||'ARS'}}));
+    const depId = uid();
+    const goal = goals.find(g=>g.id===gid);
+    save(goals.map(g=>g.id===gid?{...g,deposits:[...(g.deposits||[]),{id:depId,amount:amt,currency:df.currency||'ARS',date:depDate,desc:df.desc||''}]}:g));
+    // Crear transacción en movimientos
+    const txList = gTx(year,month);
+    const txDesc = df.desc || (goal ? goal.name : 'Meta');
+    sTx(year,month,[...txList,{id:uid(),type:type==='ret'?'income':'expense',desc:txDesc,amount:parseFloat(df.amount),currency:df.currency||'ARS',category:'Ahorro',date:depDate,fromGoal:depId}]);
+    setDep(f=>({...f,[gid]:{amount:'',currency:df.currency||'ARS',desc:''}}));
   };
 
   const delDeposit = (gid,did) => save(goals.map(g=>g.id===gid?{...g,deposits:(g.deposits||[]).filter(d=>d.id!==did)}:g));
@@ -1791,6 +1797,9 @@ function SavingsGoals({ rate }) {
                   </div>
                 )}
                 <div className="goal-add">
+                  <input className="add-inp" type="text" placeholder="Descripción (opcional)..."
+                    value={df.desc||''} onChange={e=>setDep(f=>({...f,[g.id]:{...df,desc:e.target.value}}))}
+                    onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')} style={{flex:1.5}} />
                   <input className="add-inp" type="number" placeholder="Monto..." min="0"
                     value={df.amount} onChange={e=>setDep(f=>({...f,[g.id]:{...df,amount:e.target.value}}))}
                     onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')} style={{flex:1}} />
@@ -1903,7 +1912,7 @@ function SpendingBudgets({ year, month, rate }) {
     // Also save to tx so it appears in Movimientos and affects presupuesto libre
     if(b) {
       const txList = gTx(year,month);
-      sTx(year,month,[...txList,{id:uid(),type:'expense',desc:b.name,amount:parseFloat(ef.amount),currency:ef.currency||'ARS',category:b.name,date:entDate,fromMeta:entId}]);
+      sTx(year,month,[...txList,{id:uid(),type:'expense',desc:ef.note||b.name,amount:parseFloat(ef.amount),currency:ef.currency||'ARS',category:b.name,date:entDate,fromMeta:entId}]);
     }
     setEntF(f=>({...f,[bid]:{amount:'',currency:ef.currency||'ARS',note:''}}));
   };
@@ -2022,6 +2031,10 @@ function SpendingBudgets({ year, month, rate }) {
                 )}
 
                 <div className="spend-add">
+                  <input className="add-inp" type="text" placeholder="Descripción (opcional)"
+                    value={ef.note||''} style={{flex:1.5}}
+                    onChange={e=>setEntF(f=>({...f,[b.id]:{...ef,note:e.target.value}}))}
+                    onKeyDown={e=>e.key==='Enter'&&addEntry(b.id)} />
                   <input className="add-inp" type="number" placeholder="Monto" min="0"
                     value={ef.amount} style={{width:80}}
                     onChange={e=>setEntF(f=>({...f,[b.id]:{...ef,amount:e.target.value}}))}
@@ -2162,7 +2175,7 @@ function MetasTab({ year, month, rate }) {
 
       {mode==='gastos'
         ? <SpendingBudgets year={year} month={month} rate={rate} />
-        : <SavingsGoals rate={rate} />}
+        : <SavingsGoals rate={rate} year={year} month={month} />}
     </div>
   );
 }
