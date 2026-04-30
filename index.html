@@ -873,6 +873,7 @@ const notify = () => window.dispatchEvent(new Event('data-updated'));
 
 // ── PRELOAD DATA ──
 (function() {
+  if(ls.getItem('mf_fx_2026_4') !== null) return; // skip if user data exists
   ls.setItem(`mf_tx_2026_5`, `[{"id":"fp80nd4","type":"income","desc":"Sueldo uke","amount":4878500,"currency":"ARS","category":"Sueldo","date":"2026-06-01"},{"id":"o948n2h","type":"income","desc":"Aporte Mami","amount":675000,"currency":"ARS","category":"Otros","date":"2026-06-01"},{"id":"f8vq5hg","type":"income","desc":"Ajuste inflación","amount":585420,"currency":"ARS","category":"Sueldo","date":"2026-06-01"},{"id":"dvxyp5v","type":"income","desc":"Reintegros","amount":70326,"currency":"ARS","category":"Sueldo","date":"2026-06-01"}]`);
   ls.setItem(`mf_sav_adj`, `1932`);
   ls.setItem(`mf_spend_bdg`, `[{"tdc":true,"id":"sb1","name":"Uber / Cabify","limit":300000,"currency":"ARS"},{"tdc":true,"id":"sb2","name":"Rappi / PedidosYa","limit":600000,"currency":"ARS"},{"tdc":true,"id":"sb3","name":"Suscripciones","limit":120000,"currency":"ARS"},{"tdc":true,"id":"sb4","name":"Comida afuera","limit":250000,"currency":"ARS"},{"tdc":true,"id":"sb5","name":"Servicios","limit":120000,"currency":"ARS"},{"tdc":true,"id":"sb6","name":"Cuotas","limit":110000,"currency":"ARS"},{"tdc":true,"id":"sb7","name":"Varios","limit":300000,"currency":"ARS"},{"tdc":false,"id":"qy4vc4q","name":"Varios MP","limit":420000,"currency":"ARS"},{"tdc":false,"id":"jhabces","name":"Ceci","limit":180000,"currency":"ARS"},{"tdc":false,"id":"eof3v8w","name":"Estella","limit":200000,"currency":"ARS"}]`);
