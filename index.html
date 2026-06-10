@@ -1091,6 +1091,17 @@ const migrateBudgets = () => {
 };
 migrateBudgets();
 
+// Migración única: copiar gastos fijos de junio a julio
+(function() {
+  if(ls.getItem('mf_migrate_jul26')) return;
+  const juneFx = gFx(2026, 5);
+  if(juneFx.length > 0) {
+    ls.setItem('mf_fx_2026_6', JSON.stringify(juneFx.map(f=>({...f,paid:false}))));
+    propagateFxForward(2026, 5, juneFx);
+  }
+  ls.setItem('mf_migrate_jul26', '1');
+})();
+
 /* ── SMALL COMPONENTS ── */
 function CurToggle({ value, onChange }) {
   return (
