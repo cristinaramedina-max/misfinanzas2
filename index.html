@@ -1236,7 +1236,7 @@ function ResumenTab({ year, month, rate }) {
         <div className="page-sub">{MONTHS[month]} {year}</div>
       </div>
 
-      <div className="cards-row">
+      <div className="cards-row three">
         <div className="stat-card">
           <div className="sc-lbl">Ingresos</div>
           <div className="sc-val income">{fARS(sum.income)}</div>
@@ -1265,6 +1265,11 @@ function ResumenTab({ year, month, rate }) {
           <div className="sc-lbl">🏦 Ahorrado este mes</div>
           <div className="sc-val" style={{color:'var(--teal-dark)'}}>{fARS(sum.savings)}</div>
           <div className="sc-sub">{sum.savings>0 ? 'depositado en metas ✅' : 'aún sin depositar en metas'}</div>
+        </div>
+        <div className="stat-card">
+          <div className="sc-lbl">Sobra del mes</div>
+          <div className={`sc-val ${sum.balance-sum.savings>=0?'pos':'neg'}`}>{sum.balance-sum.savings<0?'−':''}{fARS(Math.abs(sum.balance-sum.savings))}</div>
+          <div className="sc-sub">ingresos − fijos − ahorro</div>
         </div>
         <div className="stat-card">
           <div className="sc-lbl">Balance Final</div>
