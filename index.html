@@ -870,6 +870,8 @@ const ls = (() => {
   catch(e) { return { getItem: k=>__store[k]??null, setItem:(k,v)=>{__store[k]=String(v);}, removeItem:k=>{delete __store[k];} }; }
 })();
 const notify = () => window.dispatchEvent(new Event('data-updated'));
+// Si otra pestaña cambia los datos, refrescar esta para no guardar encima datos viejos
+window.addEventListener('storage', e => { if(!e.key || e.key.startsWith('mf_')) notify(); });
 
 // ── PRELOAD DATA ──
 (function() {
