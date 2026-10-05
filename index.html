@@ -1022,7 +1022,7 @@ const fmtD  = s  => { if(!s)return''; const[,m,d]=s.split('-'); return `${d}/${m
 const fARS  = n  => '$\u202f' + Math.abs(n).toLocaleString('es-AR',{maximumFractionDigits:0});
 const fUSD  = n  => 'U$S '    + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
 const fCur  = (n,c) => c==='USD' ? fUSD(n) : fARS(n);
-const toARS = (n,c,r) => c==='USD' ? n*r : n;
+const toARS = (n,c,r,rOverride) => c==='USD' ? n*(rOverride||r) : n;
 
 const calcSummary = (y,m,rate) => {
   const tx       = gTx(y,m);
