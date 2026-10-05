@@ -2346,8 +2346,9 @@ function StatsTab({ year, month, rate }) {
   const tdcRef   = useRef(null);
   const charts   = useRef({});
 
-  const { income, fijos, varExp, libre, balance } = calcSummary(year,month,rate);
-  const savingRate = income>0 ? ((balance/income)*100).toFixed(1) : 0;
+  const { income, fijos, varExp, libre, balance, savings } = calcSummary(year,month,rate);
+  const savingRate = income>0 ? ((savings/income)*100).toFixed(1) : 0;
+  const sobra = balance - savings;
 
   useEffect(()=>{
     Object.values(charts.current).forEach(c=>{try{c.destroy();}catch{}});
@@ -2452,9 +2453,9 @@ function StatsTab({ year, month, rate }) {
           <div className="sc-sub">{topCat?fARS(topCat[1]):'sin datos'}</div>
         </div>
         <div className="stat-card">
-          <div className="sc-lbl">Balance mes</div>
-          <div className={`sc-val ${balance>=0?'pos':'neg'}`}>{balance<0?'−':''}{fARS(balance)}</div>
-          <div className="sc-sub">{balance>=0?'disponible':'negativo'}</div>
+          <div className="sc-lbl">Sobra del mes</div>
+          <div className={`sc-val ${sobra>=0?'pos':'neg'}`}>{sobra<0?'−':''}{fARS(Math.abs(sobra))}</div>
+          <div className="sc-sub">ingresos − fijos − ahorro</div>
         </div>
       </div>
 
