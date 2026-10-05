@@ -1063,8 +1063,8 @@ const calcSummary = (y,m,rate) => {
     .reduce((a,g)=>a+(g.deposits||[])
       .filter(d=>d.date&&d.date.startsWith(monthStr)&&d.amount<0)
       .reduce((s,d)=>s+(d.currency==='ARS'?Math.abs(d.amount):Math.abs(d.amount)*rateSav),0),0);
-  // Presupuesto libre = Balance - gastos NO TDC - depósitos en ahorros Pesos + retiros de ahorros Pesos
-  const presupuestoLibre = balance - varExpNonTDC - savingsLibreDeposits + savingsLibreRetiros;
+  // Presupuesto libre = Balance - depósitos en ahorros Pesos + retiros de ahorros Pesos (los gastos variables ya están presupuestados)
+  const presupuestoLibre = balance - savingsLibreDeposits + savingsLibreRetiros;
   const totalUsadoLibre = varExpNonTDC + savingsLibreDeposits - savingsLibreRetiros;
   const savingsLibre = savingsLibreDeposits;
   const libreUsedPct = balance>0 ? Math.min((totalUsadoLibre/balance)*100,100) : 0;
@@ -1250,7 +1250,7 @@ function ResumenTab({ year, month, rate }) {
         <div className="stat-card">
           <div className="sc-lbl">Presupuesto Libre</div>
           <div className={`sc-val ${sum.presupuestoLibre>=0?'libre':'neg'}`}>{sum.presupuestoLibre<0?'−':''}{fARS(Math.abs(sum.presupuestoLibre))}</div>
-          <div className="sc-sub">ingresos − fijos − ahorro − gastos</div>
+          <div className="sc-sub">ingresos − fijos − ahorro</div>
         </div>
         <div className="stat-card" style={{borderLeft:'3px solid var(--teal)'}}>
           <div className="sc-lbl">🏦 Ahorrado este mes</div>
@@ -2440,7 +2440,7 @@ function StatsTab({ year, month, rate }) {
         <div className="stat-card">
           <div className="sc-lbl">Presupuesto libre</div>
           <div className={`sc-val ${presupuestoLibre>=0?'pos':'neg'}`}>{presupuestoLibre<0?'−':''}{fARS(Math.abs(presupuestoLibre))}</div>
-          <div className="sc-sub">ingresos − fijos − ahorro − gastos</div>
+          <div className="sc-sub">ingresos − fijos − ahorro</div>
         </div>
       </div>
 
