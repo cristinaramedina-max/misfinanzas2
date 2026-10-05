@@ -995,8 +995,8 @@ const sGoals = d     => { pushUndo(); ls.setItem('mf_goals', JSON.stringify(d));
 const gRate      = ()  => parseFloat(ls.getItem('mf_rate')      || '1150');
 const gTDCLimits = ()  => { try { return JSON.parse(ls.getItem('mf_tdc_limits')||'null') || {naranja:700000,santander:700000,galicia:1000000}; } catch { return {naranja:700000,santander:700000,galicia:1000000}; } };
 const sTDCLimits = d   => { ls.setItem('mf_tdc_limits', JSON.stringify(d)); notify(); };
-const gRateMami  = ()  => parseFloat(ls.getItem('mf_rate_mami') || '1150');
-const gRateSav   = ()  => parseFloat(ls.getItem('mf_rate_sav')  || '1150');
+const gRateMami  = ()  => parseFloat(ls.getItem('mf_rate_mami') || ls.getItem('mf_rate') || '1150');
+const gRateSav   = ()  => parseFloat(ls.getItem('mf_rate_sav')  || ls.getItem('mf_rate') || '1150');
 const sRateMami  = v   => { ls.setItem('mf_rate_mami', String(v)); notify(); };
 const sRateSav   = v   => { ls.setItem('mf_rate_sav',  String(v)); notify(); };
 const sRate   = r     => ls.setItem('mf_rate', String(r));
@@ -1261,13 +1261,11 @@ function ResumenTab({ year, month, rate }) {
           <div className={`sc-val ${sum.presupuestoLibre>=0?'libre':'neg'}`}>{sum.presupuestoLibre<0?'−':''}{fARS(Math.abs(sum.presupuestoLibre))}</div>
           <div className="sc-sub">ingresos − fijos</div>
         </div>
-        {sum.savings>0 && (
-          <div className="stat-card">
-            <div className="sc-lbl">Ahorrado este mes</div>
-            <div className="sc-val" style={{color:'var(--teal-dark)'}}>{fARS(sum.savings)}</div>
-            <div className="sc-sub">depositado en metas</div>
-          </div>
-        )}
+        <div className="stat-card" style={{borderLeft:'3px solid var(--teal)'}}>
+          <div className="sc-lbl">🏦 Ahorrado este mes</div>
+          <div className="sc-val" style={{color:'var(--teal-dark)'}}>{fARS(sum.savings)}</div>
+          <div className="sc-sub">{sum.savings>0 ? 'depositado en metas ✅' : 'aún sin depositar en metas'}</div>
+        </div>
         <div className="stat-card">
           <div className="sc-lbl">Balance Final</div>
           <div className={`sc-val ${sum.balance>=0?'pos':'neg'}`}>{sum.balance<0?'−':''}{fARS(sum.balance)}</div>
