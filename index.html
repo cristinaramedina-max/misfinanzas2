@@ -1830,13 +1830,14 @@ function SavingsGoals({ rate, year, month }) {
                     ))}
                   </div>
                 )}
+                <input className="add-inp" type="text" placeholder="Descripción (opcional)..."
+                  value={df.desc||''} onChange={e=>setDep(f=>({...f,[g.id]:{...df,desc:e.target.value}}))}
+                  onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')}
+                  style={{width:'100%',boxSizing:'border-box',fontSize:12,padding:'6px 9px',marginBottom:6}} />
                 <div className="goal-add">
-                  <input className="add-inp" type="text" placeholder="Descripción (opcional)..."
-                    value={df.desc||''} onChange={e=>setDep(f=>({...f,[g.id]:{...df,desc:e.target.value}}))}
-                    onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')} style={{flex:1.5}} />
                   <input className="add-inp" type="number" placeholder="Monto..." min="0"
                     value={df.amount} onChange={e=>setDep(f=>({...f,[g.id]:{...df,amount:e.target.value}}))}
-                    onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')} style={{flex:1}} />
+                    onKeyDown={e=>e.key==='Enter'&&addDeposit(g.id,'dep')} style={{flex:1,minWidth:70}} />
                   <CurToggle value={df.currency||'ARS'} onChange={c=>setDep(f=>({...f,[g.id]:{...df,currency:c}}))} />
                   <button className="add-btn" onClick={()=>addDeposit(g.id,'dep')} style={{background:'var(--teal-dark)'}} title="Depositar">+</button>
                   <button className="add-btn" onClick={()=>addDeposit(g.id,'ret')} style={{background:'var(--pink-dark)'}} title="Retirar">−</button>
