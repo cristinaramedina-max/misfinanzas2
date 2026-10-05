@@ -1032,9 +1032,11 @@ const calcSummary = (y,m,rate) => {
   const rateSav  = gRateSav();
   const tdcCats  = gSpendBdg().filter(b=>b.tdc).map(b=>b.name);
   const monthStr = y+'-'+String(m+1).padStart(2,'0');
+  // Movimientos generados por depósitos/retiros de metas: el ahorro se cuenta aparte, no como ingreso/gasto
+  const isGoalTx = t => t.fromGoal || (t.type==='expense' && t.category==='Ahorro');
 
   // Ingresos — con tipos de cambio correctos
-  const income = tx.filter(t=>t.type==='income').reduce((a,t)=>{
+  const income = tx.filter(t=>t.type==='income'&&!isGoalTx(t)).reduce((a,t)=>{
     if(t.currency==='ARS') return a+t.amount;
     if(t.desc==='Aporte Mami') return a+toARS(t.amount,t.currency,rate,rateMami);
     return a+toARS(t.amount,t.currency,rate,rateSav);
@@ -1047,8 +1049,8 @@ const calcSummary = (y,m,rate) => {
   const balance = income - fijos;
 
   // Gastos variables NO TDC en movimientos
-  const varExpNonTDC = tx.filter(t=>t.type==='expense'&&!tdcCats.includes(t.category)).reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
-  const varExp       = tx.filter(t=>t.type==='expense').reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
+  const varExpNonTDC = tx.filter(t=>t.type==='expense'&&!isGoalTx(t)&&!tdcCats.includes(t.category)).reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
+  const varExp       = tx.filter(t=>t.type==='expense'&&!isGoalTx(t)).reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
 
   // Depósitos en metas no-BOA restan del presupuesto libre, retiros suman
   const savingsLibreDeposits = goals
@@ -1259,7 +1261,7 @@ function ResumenTab({ year, month, rate }) {
         <div className="stat-card">
           <div className="sc-lbl">Presupuesto Libre</div>
           <div className={`sc-val ${sum.presupuestoLibre>=0?'libre':'neg'}`}>{sum.presupuestoLibre<0?'−':''}{fARS(Math.abs(sum.presupuestoLibre))}</div>
-          <div className="sc-sub">ingresos − fijos</div>
+          <div className="sc-sub">ingresos − fijos − ahorro − gastos</div>
         </div>
         <div className="stat-card" style={{borderLeft:'3px solid var(--teal)'}}>
           <div className="sc-lbl">🏦 Ahorrado este mes</div>
@@ -1267,14 +1269,9 @@ function ResumenTab({ year, month, rate }) {
           <div className="sc-sub">{sum.savings>0 ? 'depositado en metas ✅' : 'aún sin depositar en metas'}</div>
         </div>
         <div className="stat-card">
-          <div className="sc-lbl">Sobra del mes</div>
-          <div className={`sc-val ${sum.balance-sum.savings>=0?'pos':'neg'}`}>{sum.balance-sum.savings<0?'−':''}{fARS(Math.abs(sum.balance-sum.savings))}</div>
-          <div className="sc-sub">ingresos − fijos − ahorro</div>
-        </div>
-        <div className="stat-card">
           <div className="sc-lbl">Balance Final</div>
           <div className={`sc-val ${sum.balance>=0?'pos':'neg'}`}>{sum.balance<0?'−':''}{fARS(sum.balance)}</div>
-          <div className="sc-sub">{sum.balance>=0?'disponible':'en negativo'}</div>
+          <div className="sc-sub">ingresos − fijos</div>
         </div>
       </div>
 
@@ -2346,9 +2343,8 @@ function StatsTab({ year, month, rate }) {
   const tdcRef   = useRef(null);
   const charts   = useRef({});
 
-  const { income, fijos, varExp, libre, balance, savings } = calcSummary(year,month,rate);
+  const { income, fijos, varExp, libre, balance, savings, presupuestoLibre } = calcSummary(year,month,rate);
   const savingRate = income>0 ? ((savings/income)*100).toFixed(1) : 0;
-  const sobra = balance - savings;
 
   useEffect(()=>{
     Object.values(charts.current).forEach(c=>{try{c.destroy();}catch{}});
@@ -2453,8 +2449,8 @@ function StatsTab({ year, month, rate }) {
           <div className="sc-sub">{topCat?fARS(topCat[1]):'sin datos'}</div>
         </div>
         <div className="stat-card">
-          <div className="sc-lbl">Sobra del mes</div>
-          <div className={`sc-val ${sobra>=0?'pos':'neg'}`}>{sobra<0?'−':''}{fARS(Math.abs(sobra))}</div>
+          <div className="sc-lbl">Presupuesto libre</div>
+          <div className={`sc-val ${presupuestoLibre>=0?'pos':'neg'}`}>{presupuestoLibre<0?'−':''}{fARS(Math.abs(presupuestoLibre))}</div>
           <div className="sc-sub">ingresos − fijos − ahorro</div>
         </div>
       </div>
