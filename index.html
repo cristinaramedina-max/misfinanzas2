@@ -1054,7 +1054,8 @@ const sSpendEnt  = (y,m,d)  => { pushUndo(); ls.setItem(`mf_sent_${y}_${m}`, JSO
 
 /* ── HELPERS ── */
 const uid   = () => Math.random().toString(36).slice(2,9);
-const today = () => new Date().toISOString().split('T')[0];
+// Fecha local (toISOString usa UTC y después de las 21 h en Argentina da el día siguiente)
+const today = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const fmtD  = s  => { if(!s)return''; const[,m,d]=s.split('-'); return `${d}/${m}`; };
 const fARS  = n  => '$\u202f' + Math.abs(n).toLocaleString('es-AR',{maximumFractionDigits:0});
 const fUSD  = n  => 'U$S '    + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
@@ -1537,8 +1538,8 @@ function MovimientosTab({ year, month, rate }) {
     setErr(false);
     const cat = form.type==='income' ? (CATS_INC.includes(form.category)?form.category:'Sueldo') : form.category;
     // Save to the month of the chosen date, not necessarily the current viewed month
-    const d = new Date(form.date);
-    const ty = d.getFullYear(), tm = d.getMonth();
+    // Año y mes leídos del texto: new Date('YYYY-MM-DD') es UTC y en Argentina cae en el mes anterior
+    const [ty, tm1] = form.date.split('-').map(Number), tm = tm1-1;
     const targetTx = gTx(ty, tm);
     sTx(ty, tm, [...targetTx, {id:uid(),type:form.type,desc:form.desc.trim(),amount:parseFloat(form.amount),currency:form.currency,category:cat,date:form.date}]);
     // Refresh local items if same month
