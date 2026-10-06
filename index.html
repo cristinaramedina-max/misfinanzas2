@@ -1319,7 +1319,10 @@ function ResumenTab({ year, month, rate }) {
 
       {(()=>{ const d=gAhorros(); return (
         <>
-          <div className="sec-title">Mis ahorros</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+            <div className="sec-title">Mis ahorros</div>
+            <button className="meta-btn" style={{border:'1.5px solid var(--border)',padding:'6px 14px'}} onClick={()=>window.dispatchEvent(new CustomEvent('ir-a-ahorros'))}>🏦 Ir a ahorros →</button>
+          </div>
           <div className="goals-grid">
             {d.cuentas.map(c=>{ const ap=aportesCuenta(d,c.id); const mio=c.titulares.filter(t=>t.mio).reduce((a,t)=>a+t.amount,0)+ap; const fam=c.titulares.filter(t=>!t.mio).reduce((a,t)=>a+t.amount,0); return (
               <div key={c.id} className="goal-card">
@@ -2217,7 +2220,7 @@ function TDCProgressCards({ year, month, rate }) {
 
 /* ── METAS TAB ── */
 function MetasTab({ year, month, rate }) {
-  const [mode, setMode] = useState('gastos');
+  const [mode, setMode] = useState(()=>{ const m=__irAhorros?'ahorro':'gastos'; __irAhorros=false; return m; });
   const [tick, setTick] = useState(0);
   useEffect(()=>{ const h=()=>setTick(t=>t+1); window.addEventListener('data-updated',h); return()=>window.removeEventListener('data-updated',h); },[]);
   const budgets = gSpendBdg();
@@ -2347,6 +2350,7 @@ function MetasTab({ year, month, rate }) {
 
 /* ── SUSCRIPCIONES / SERVICIOS / CUOTAS ── */
 // Estado de UI que sobrevive a los remounts por refreshKey
+let __irAhorros = false;
 const __uiMem = { desgloseView:'chart', subsFiltro:'all', chartModo:'todas' };
 // Límites presupuestados del mes según la vista del gráfico: todas, solo TDC, o agrupado TDC / pesos del mes
 const presupuestadoPor = (modo,y,m,rate) => {
@@ -2794,6 +2798,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function App() {
   const now = new Date();
   const [tab,   setTab]   = useState('overview');
+  // Botón 'Ir a ahorros' del Resumen: abre Metas en la pestaña Ahorro
+  useEffect(()=>{ const h=()=>{ __irAhorros=true; setTab('metas'); window.scrollTo(0,0); }; window.addEventListener('ir-a-ahorros',h); return()=>window.removeEventListener('ir-a-ahorros',h); },[]);
   const [year,  setYear]  = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [rate,  setRate]  = useState(gRate);
