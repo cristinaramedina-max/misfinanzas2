@@ -1678,6 +1678,101 @@ function MovimientosTab({ year, month, rate }) {
 }
 
 /* ── SAVINGS GOALS ── */
+// ── AHORRO POR MES ──
+// Sobrante (ingresos − fijos), planificado en presupuestos sin tarjeta, sugerido y real cargado
+const ahorroMes = (y,m) => {
+  const r = gRate(); const s = calcSummary(y,m,r);
+  const plan = gSpendBdg().filter(b=>!b.tdc).reduce((a,b)=>a+bdgLimitARS(b,y,m,r),0);
+  return { income:s.income, fijos:s.fijos, sobrante:s.balance, plan, sugerido:s.balance-plan, real:s.savings };
+};
+// Meses desde el primero con datos hasta (y,m), máximo 24
+const mesesConDatos = (y,m) => {
+  let min = null;
+  try { for(let i=0;i<window.localStorage.length;i++){ const mt=(window.localStorage.key(i)||'').match(/^mf_(tx|fx)_(\d+)_(\d+)$/); if(mt){ const v=ymKey(+mt[2],+mt[3]); if(min===null||v<min) min=v; } } } catch(e){}
+  const end = ymKey(y,m); if(min===null||min>end) min = end;
+  const out = []; for(let v=Math.max(min,end-23); v<=end; v++) out.push([Math.floor(v/12), v%12]);
+  return out;
+};
+const AHORRO_PLAN_SEED = { checks:{}, extras:[{id:'dirtyhooker',name:'Dirty Hooker',amount:440,currency:'USD',done:false}] };
+const gAhorroPlan = () => { try { return JSON.parse(ls.getItem('mf_ahorro_plan')) || AHORRO_PLAN_SEED; } catch { return AHORRO_PLAN_SEED; } };
+const sAhorroPlan = d => { pushUndo(); ls.setItem('mf_ahorro_plan', JSON.stringify(d)); notify(); };
+
+function AhorroPlan({ year, month }) {
+  const [plan, setPlan] = useState(gAhorroPlan);
+  const [form, setForm] = useState({name:'',amount:'',currency:'USD'});
+  const save = p => { sAhorroPlan(p); setPlan(p); };
+  const rows = mesesConDatos(year,month).reverse().map(([y,m])=>({y,m,key:y+'-'+String(m+1).padStart(2,'0'),...ahorroMes(y,m)}));
+  const toggleMes = k => save({...plan, checks:{...plan.checks,[k]:!plan.checks[k]}});
+  const toggleExtra = id => save({...plan, extras:plan.extras.map(x=>x.id===id?{...x,done:!x.done}:x)});
+  const delExtra = id => { if(confirm('¿Eliminar este ahorro?')) save({...plan, extras:plan.extras.filter(x=>x.id!==id)}); };
+  const addExtra = () => {
+    if(!form.name.trim()||!(parseFloat(form.amount)>0)) return;
+    save({...plan, extras:[...plan.extras,{id:uid(),name:form.name.trim(),amount:parseFloat(form.amount),currency:form.currency,done:false}]});
+    setForm(f=>({...f,name:'',amount:''}));
+  };
+  const th = {textAlign:'right',padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:.5,borderBottom:'1.5px solid var(--border)',whiteSpace:'nowrap'};
+  const td = {padding:'8px 10px',fontSize:13,borderBottom:'1px solid var(--border)',textAlign:'right',whiteSpace:'nowrap'};
+  const neg = v => (v<0?'−':'')+fARS(Math.abs(v));
+  const chk = {width:18,height:18,cursor:'pointer',accentColor:'var(--teal-dark)'};
+
+  return (
+    <div className="list-section" style={{marginBottom:16,padding:16}}>
+      <div className="sc-lbl" style={{marginBottom:10}}>📅 Ahorro por mes · sugerido vs real</div>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'var(--font)'}}>
+          <thead><tr>
+            <th style={{...th,textAlign:'left'}}>Mes</th>
+            <th style={th}>Sobrante<br/>(ing. − fijos)</th>
+            <th style={th}>Planificado<br/>sin tarjeta</th>
+            <th style={th}>Sugerido</th>
+            <th style={th}>Real cargado</th>
+            <th style={th}>Diferencia</th>
+            <th style={{...th,textAlign:'center'}}>Ahorrado</th>
+          </tr></thead>
+          <tbody>
+            {rows.map(r=>{
+              const dif = r.real - Math.max(0,r.sugerido);
+              const done = !!plan.checks[r.key];
+              return (
+                <tr key={r.key} style={{background:r.y===year&&r.m===month?'var(--surface2)':'transparent',opacity:done?1:.95}}>
+                  <td style={{...td,textAlign:'left',fontWeight:700}}>{MONTHS[r.m]} {r.y}</td>
+                  <td style={td}>{neg(r.sobrante)}</td>
+                  <td style={{...td,color:'var(--muted)'}}>{fARS(r.plan)}</td>
+                  <td style={{...td,fontWeight:700,color:r.sugerido>=0?'var(--teal-dark)':'var(--pink-dark)'}}>{neg(r.sugerido)}</td>
+                  <td style={{...td,fontWeight:700}}>{fARS(r.real)}</td>
+                  <td style={{...td,color:dif>=0?'var(--teal-dark)':'var(--pink-dark)'}}>{dif>=0?'+':''}{neg(dif)}</td>
+                  <td style={{...td,textAlign:'center'}}><input type="checkbox" style={chk} checked={done} onChange={()=>toggleMes(r.key)} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>Sugerido = sobrante − planificado en presupuestos sin tarjeta. Real = depósitos cargados en las metas ese mes.</div>
+
+      <div className="sc-lbl" style={{margin:'18px 0 8px'}}>⭐ Ahorros puntuales</div>
+      {plan.extras.map(x=>(
+        <div key={x.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 4px',borderBottom:'1px solid var(--border)'}}>
+          <input type="checkbox" style={chk} checked={!!x.done} onChange={()=>toggleExtra(x.id)} />
+          <span style={{flex:1,fontWeight:700,textDecoration:x.done?'line-through':'none',color:x.done?'var(--muted)':'var(--ink)'}}>{x.name}</span>
+          <span style={{fontWeight:700}}>{fCur(x.amount,x.currency)}</span>
+          <span style={{fontSize:11,color:x.done?'var(--teal-dark)':'var(--muted)',width:80,textAlign:'right'}}>{x.done?'✅ ahorrado':'pendiente'}</span>
+          <button onClick={()=>delExtra(x.id)} title="Eliminar"
+            style={{background:'var(--red-light)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'var(--font)',fontSize:11,fontWeight:700,color:'var(--pink-dark)',padding:'4px 8px'}}>🗑</button>
+        </div>
+      ))}
+      <div className="add-row" style={{marginTop:10}}>
+        <input className="add-inp" placeholder="Concepto (ej: Dirty Hooker)" value={form.name} style={{flex:2,minWidth:140}}
+          onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addExtra()} />
+        <input className="add-inp" type="number" min="0" placeholder="Monto" value={form.amount} style={{flex:1,minWidth:90}}
+          onChange={e=>setForm(f=>({...f,amount:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&addExtra()} />
+        <CurToggle value={form.currency} onChange={c=>setForm(f=>({...f,currency:c}))} />
+        <button className="add-btn" onClick={addExtra} title="Agregar">+</button>
+      </div>
+    </div>
+  );
+}
+
 function SavingsGoals({ rate, year, month }) {
   const [goals,   setGoals]  = useState(()=>gGoals());
   const [form,    setForm]   = useState({name:'',target:'',currency:'ARS'});
@@ -1749,8 +1844,8 @@ function SavingsGoals({ rate, year, month }) {
   };
 
   // Disponible para ahorrar (sugerencia): presupuesto libre − gastos del mes que no van a tarjeta
-  const sumMes = calcSummary(year,month,gRate());
-  const disponible = sumMes.presupuestoLibre - sumMes.varExpNonTDC;
+  const am = ahorroMes(year,month);
+  const disponible = Math.max(0,am.sugerido) - am.real; // lo que falta ahorrar del sugerido
   const [cargar, setCargar] = useState(null); // {gid, currency, tc, amount}
   const abrirCargar = () => {
     const g0 = goals.find(g=>g.name!=='Bank of america'&&g.name!=='Bank of America') || goals[0];
@@ -1811,8 +1906,11 @@ function SavingsGoals({ rate, year, month }) {
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
           <div>
             <div className="sc-lbl">💡 Disponible para ahorrar · {MONTHS[month]}</div>
-            <div className="sc-val" style={{color:disponible>=0?'var(--teal-dark)':'var(--pink-dark)'}}>{disponible<0?'−':''}{fARS(Math.abs(disponible))}</div>
-            <div className="sc-sub">presupuesto libre {fARS(sumMes.presupuestoLibre)} − gastos sin tarjeta {fARS(sumMes.varExpNonTDC)} · sugerencia</div>
+            <div className="sc-val" style={{color:disponible>0?'var(--teal-dark)':'var(--muted)'}}>{disponible>0?fARS(disponible):am.real>0?'✅ Cumplido':'Sin margen este mes'}</div>
+            <div className="sc-sub">
+              Sugerido {am.sugerido<0?'−':''}{fARS(Math.abs(am.sugerido))} (sobrante {fARS(am.sobrante)} − planificado sin tarjeta {fARS(am.plan)}) · ya ahorraste {fARS(am.real)}
+              {disponible<0 && am.real>0 && <> · {fARS(-disponible)} más de lo sugerido</>}
+            </div>
           </div>
           {!cargar && goals.length>0 && disponible>0 && <button className="add-btn" style={{width:'auto',padding:'0 16px',background:'var(--teal-dark)'}} onClick={abrirCargar}>Cargar como ahorro</button>}
         </div>
@@ -1837,6 +1935,7 @@ function SavingsGoals({ rate, year, month }) {
           </div>
         )}
       </div>
+      <AhorroPlan year={year} month={month} />
       <div className="list-section" style={{marginBottom:16}}>
         <div className="add-row">
           <input className={`add-inp desc${err&&!form.name?' err':''}`}
@@ -2786,6 +2885,35 @@ function StatsTab({ year, month, rate }) {
         <div className="chart-card">
           <div className="chart-title">Ingresos vs Gastos · 6 meses</div>
           <canvas ref={lineRef}></canvas>
+        </div>
+      </div>
+
+      <div className="chart-card" style={{marginBottom:16}}>
+        <div className="chart-title">Resumen por mes · lo que sobró y lo que ahorraste</div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'var(--font)'}}>
+            <thead><tr>
+              {['Mes','Ingresos','Gastos fijos','Sobró después de fijos','Ahorro cargado','% ahorrado'].map((h,i)=>(
+                <th key={h} style={{textAlign:i===0?'left':'right',padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:.5,borderBottom:'1.5px solid var(--border)',whiteSpace:'nowrap'}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {(()=>{ const ms=[]; for(let i=5;i>=0;i--){ let y=year,m=month-i; while(m<0){m+=12;y--;} ms.push([y,m]); } return ms; })().map(([y,m])=>{
+                const a = ahorroMes(y,m);
+                const td = {padding:'8px 10px',fontSize:13,borderBottom:'1px solid var(--border)',textAlign:'right',whiteSpace:'nowrap'};
+                return (
+                  <tr key={y+'-'+m} style={{background:y===year&&m===month?'var(--surface2)':'transparent'}}>
+                    <td style={{...td,textAlign:'left',fontWeight:700}}>{MONTHS[m]} {y}</td>
+                    <td style={td}>{fARS(a.income)}</td>
+                    <td style={{...td,color:'var(--pink-dark)'}}>{fARS(a.fijos)}</td>
+                    <td style={{...td,fontWeight:800,color:a.sobrante>=0?'var(--teal-dark)':'var(--pink-dark)'}}>{a.sobrante<0?'−':''}{fARS(Math.abs(a.sobrante))}</td>
+                    <td style={{...td,fontWeight:700}}>{fARS(a.real)}</td>
+                    <td style={{...td,color:'var(--muted)'}}>{a.income>0?Math.round(a.real/a.income*1000)/10:0}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
