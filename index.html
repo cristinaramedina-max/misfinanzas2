@@ -2327,6 +2327,8 @@ function MetasTab({ year, month, rate }) {
 }
 
 /* ── SUSCRIPCIONES / SERVICIOS / CUOTAS ── */
+// Estado de UI que sobrevive a los remounts por refreshKey
+const __uiMem = { desgloseView:'chart', subsFiltro:'all' };
 const SUBS_TIPOS = ['Suscripción','Servicio','Cuota'];
 const SUBS_FILTROS = [['all','Todos'],['Suscripción','Suscripciones'],['Servicio','Servicios'],['Cuota','Cuotas']];
 const SUBS_SEED = [
@@ -2372,14 +2374,36 @@ const gSubs = () => {
   return d;
 };
 const sSubs = d => { pushUndo(); ls.setItem('mf_subs', JSON.stringify(d)); notify(); };
+// Cada tipo de la tabla define el límite presupuestado de su tarjeta en Presupuestos
+const SUBS_BDG = { 'Suscripción':'Suscripciones', 'Servicio':'Servicios', 'Cuota':'Cuotas' };
+const syncSubsBudgets = (items, rate) => {
+  let bdgs = gSpendBdg(), changed = false;
+  Object.entries(SUBS_BDG).forEach(([tipo,name])=>{
+    const limit = Math.round(items.filter(i=>i.tipo===tipo).reduce((a,i)=>a+toARS(i.amount,i.currency,rate),0));
+    const b = bdgs.find(b=>b.name===name);
+    if(b) { if(b.limit!==limit||b.currency!=='ARS') { bdgs = bdgs.map(x=>x.id===b.id?{...x,limit,currency:'ARS'}:x); changed = true; } }
+    else if(limit>0) { bdgs = [...bdgs,{id:uid(),name,limit,currency:'ARS',tdc:true}]; changed = true; }
+  });
+  if(changed) sSpendBdg(bdgs);
+};
 
 function SubsTable({ rate }) {
   const [items, setItems] = useState(gSubs);
-  const [filtro, setFiltro] = useState('all');
+  const [filtro, _setFiltro] = useState(()=>__uiMem.subsFiltro);
+  const setFiltro = v => { __uiMem.subsFiltro = v; _setFiltro(v); };
   const [form, setForm] = useState({tipo:'Suscripción',name:'',amount:'',currency:'ARS',note:''});
-  useEffect(()=>{ if(ls.getItem('mf_subs')===null) { ls.setItem('mf_subs', JSON.stringify(items)); ls.setItem('mf_subs_cuotas_v1','1'); } },[]);
+  const [edit, setEdit] = useState(null); // fila en edición
+  useEffect(()=>{
+    if(ls.getItem('mf_subs')===null) { ls.setItem('mf_subs', JSON.stringify(items)); ls.setItem('mf_subs_cuotas_v1','1'); }
+    syncSubsBudgets(items, rate);
+  },[]);
 
-  const save = d => { sSubs(d); setItems(d); };
+  const save = d => { sSubs(d); setItems(d); syncSubsBudgets(d, rate); };
+  const saveEdit = () => {
+    if(!edit.name.trim()||!(parseFloat(edit.amount)>0)) return;
+    save(items.map(i=>i.id===edit.id?{...edit,name:edit.name.trim(),amount:parseFloat(edit.amount),note:(edit.note||'').trim()}:i));
+    setEdit(null);
+  };
   const add = () => {
     if(!form.name.trim()||!form.amount||parseFloat(form.amount)<=0) return;
     save([...items,{id:uid(),tipo:form.tipo,name:form.name.trim(),amount:parseFloat(form.amount),currency:form.currency,note:form.note.trim()}]);
@@ -2406,14 +2430,41 @@ function SubsTable({ rate }) {
             <th style={{...th,textAlign:'right'}}>Equiv. ARS</th><th style={th}>Origen / nota</th><th style={th}></th>
           </tr></thead>
           <tbody>
-            {visibles.map(i=>(
+            {visibles.map(i=> edit&&edit.id===i.id ? (
+              <tr key={i.id} style={{background:'var(--surface2)'}}>
+                <td style={td}>
+                  <select className="cat-sel" value={edit.tipo} onChange={e=>setEdit(x=>({...x,tipo:e.target.value}))}>
+                    {SUBS_TIPOS.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </td>
+                <td style={td}><input className="add-inp" value={edit.name} style={{width:'100%',boxSizing:'border-box'}} autoFocus
+                  onChange={e=>setEdit(x=>({...x,name:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')setEdit(null);}} /></td>
+                <td style={td} colSpan={2}>
+                  <div style={{display:'flex',gap:6,alignItems:'center',justifyContent:'flex-end'}}>
+                    <input className="add-inp" type="number" min="0" value={edit.amount} style={{width:100,textAlign:'right'}}
+                      onChange={e=>setEdit(x=>({...x,amount:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')setEdit(null);}} />
+                    <CurToggle value={edit.currency} onChange={c=>setEdit(x=>({...x,currency:c}))} />
+                  </div>
+                </td>
+                <td style={td}><input className="add-inp" value={edit.note||''} style={{width:'100%',boxSizing:'border-box'}}
+                  onChange={e=>setEdit(x=>({...x,note:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')setEdit(null);}} /></td>
+                <td style={{...td,whiteSpace:'nowrap'}}>
+                  <button className="add-btn" onClick={saveEdit} title="Guardar" style={{background:'var(--teal-dark)'}}>✓</button>{' '}
+                  <button className="add-btn" onClick={()=>setEdit(null)} title="Cancelar" style={{background:'var(--muted)'}}>✕</button>
+                </td>
+              </tr>
+            ) : (
               <tr key={i.id}>
                 <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.tipo}</td>
                 <td style={{...td,fontWeight:700}}>{i.name}</td>
                 <td style={{...td,textAlign:'right'}}>{fCur(i.amount,i.currency)}</td>
                 <td style={{...td,textAlign:'right',fontWeight:700}}>{fARS(ars(i))}</td>
                 <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.note}</td>
-                <td style={{...td,width:30}}><DelBtn onClick={()=>save(items.filter(x=>x.id!==i.id))} /></td>
+                <td style={{...td,whiteSpace:'nowrap',width:60}}>
+                  <button onClick={()=>setEdit({...i,amount:String(i.amount)})} title="Editar"
+                    style={{background:'none',border:'none',cursor:'pointer',fontSize:13,opacity:.6,padding:'0 6px'}}>✏️</button>
+                  <DelBtn onClick={()=>{ if(confirm(`¿Eliminar "${i.name}"?`)) save(items.filter(x=>x.id!==i.id)); }} />
+                </td>
               </tr>
             ))}
             {visibles.length===0 && <tr><td colSpan={6} style={{...td,textAlign:'center',color:'var(--muted)'}}>Sin datos</td></tr>}
@@ -2449,7 +2500,8 @@ function StatsTab({ year, month, rate }) {
   const hbarRef  = useRef(null);
   const tdcRef   = useRef(null);
   const charts   = useRef({});
-  const [desgloseView, setDesgloseView] = useState('chart');
+  const [desgloseView, _setDesgloseView] = useState(()=>__uiMem.desgloseView);
+  const setDesgloseView = v => { __uiMem.desgloseView = v; _setDesgloseView(v); };
 
   const { income, fijos, varExp, libre, balance, savings, presupuestoLibre } = calcSummary(year,month,rate);
   const savingRate = income>0 ? ((savings/income)*100).toFixed(1) : 0;
@@ -2470,10 +2522,9 @@ function StatsTab({ year, month, rate }) {
     fx.forEach(f=>{ bycat[f.category]=(bycat[f.category]||0)+toARS(f.amount,f.currency,rate); });
     const catE = Object.entries(bycat).sort((a,b)=>b[1]-a[1]);
 
-    // TDC breakdown from metas entries
-    const tdcCats = bdgs.filter(b=>b.tdc).map(b=>b.name);
+    // Desglose de lo presupuestado: límite mensual de cada presupuesto
     const bytdc = {};
-    ents.forEach(e=>{ const b=bdgs.find(b=>b.id===e.budgetId); if(!b) return; const k=b.name; bytdc[k]=(bytdc[k]||0)+toARS(e.amount,e.currency,rate); });
+    bdgs.forEach(b=>{ if(b.limit>0) bytdc[b.name]=(bytdc[b.name]||0)+toARS(b.limit,b.currency,rate); });
     const tdcE = Object.entries(bytdc).sort((a,b)=>b[1]-a[1]);
 
     const months6=[],inc6=[],exp6=[];
@@ -2586,7 +2637,7 @@ function StatsTab({ year, month, rate }) {
       <div style={{marginTop:16}}>
         <div className="chart-card">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}}>
-            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Desglose por gastos particulares':'Suscripciones, servicios y cuotas'}</div>
+            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Presupuestado por categoría':'Suscripciones, servicios y cuotas'}</div>
             <div className="meta-toggle" style={{margin:0}}>
               <button className={`meta-btn${desgloseView==='chart'?' active':''}`} onClick={()=>setDesgloseView('chart')}>📊 Gráfico</button>
               <button className={`meta-btn${desgloseView==='subs'?' active':''}`} onClick={()=>setDesgloseView('subs')}>📋 Tabla</button>
