@@ -1094,12 +1094,12 @@ const calcSummary = (y,m,rate) => {
     .filter(g=>g.name!=='Bank of america'&&g.name!=='Bank of America')
     .reduce((a,g)=>a+(g.deposits||[])
       .filter(d=>d.date&&d.date.startsWith(monthStr)&&d.amount>0)
-      .reduce((s,d)=>s+(d.currency==='ARS'?d.amount:d.amount*rateSav),0),0);
+      .reduce((s,d)=>s+(d.currency==='ARS'?d.amount:d.amount*(d.rate||rateSav)),0),0);
   const savingsLibreRetiros = goals
     .filter(g=>g.name!=='Bank of america'&&g.name!=='Bank of America')
     .reduce((a,g)=>a+(g.deposits||[])
       .filter(d=>d.date&&d.date.startsWith(monthStr)&&d.amount<0)
-      .reduce((s,d)=>s+(d.currency==='ARS'?Math.abs(d.amount):Math.abs(d.amount)*rateSav),0),0);
+      .reduce((s,d)=>s+(d.currency==='ARS'?Math.abs(d.amount):Math.abs(d.amount)*(d.rate||rateSav)),0),0);
   // Presupuesto libre = Balance - depósitos en ahorros Pesos + retiros de ahorros Pesos (los gastos variables ya están presupuestados)
   const presupuestoLibre = balance - savingsLibreDeposits + savingsLibreRetiros;
   const totalUsadoLibre = varExpNonTDC + savingsLibreDeposits - savingsLibreRetiros;
@@ -1107,7 +1107,7 @@ const calcSummary = (y,m,rate) => {
   const libreUsedPct = balance>0 ? Math.min((totalUsadoLibre/balance)*100,100) : 0;
 
   // Savings
-  const savingsDeposits = goals.reduce((a,g)=>a+(g.deposits||[]).filter(d=>d.date&&d.date.startsWith(monthStr)&&d.amount>0).reduce((s,d)=>s+toARS(d.amount,d.currency,rate,rateSav),0),0);
+  const savingsDeposits = goals.reduce((a,g)=>a+(g.deposits||[]).filter(d=>d.date&&d.date.startsWith(monthStr)&&d.amount>0).reduce((s,d)=>s+toARS(d.amount,d.currency,rate,d.rate||rateSav),0),0);
   const fijosPagados    = fx.filter(f=>f.paid).reduce((a,f)=>a+toARS(f.amount,f.currency,rate),0);
   const totalGastado    = fijosPagados + varExp + savingsDeposits;
 
@@ -1692,7 +1692,7 @@ function SavingsGoals({ rate, year, month }) {
   // Total across ALL months + manual adjustment
   const [totalCur, setTotalCur] = useState('ARS');
   const rSav = gRateSav();
-  const goalBreakdown = goals.map(g=>{ const savedARS=(g.deposits||[]).reduce((s,d)=>s+toARS(d.amount,d.currency,rSav),0); return {name:g.name,currency:g.currency,totalARS:savedARS,totalUSD:savedARS/rSav,totalOwn:g.currency==='USD'?savedARS/rSav:savedARS}; });
+  const goalBreakdown = goals.map(g=>{ const savedARS=(g.deposits||[]).reduce((s,d)=>s+toARS(d.amount,d.currency,rSav,d.rate),0); return {name:g.name,currency:g.currency,totalARS:savedARS,totalUSD:savedARS/rSav,totalOwn:g.currency==='USD'?savedARS/rSav:savedARS}; });
   const totalDepositsARS = goalBreakdown.reduce((a,g)=>a+g.totalARS,0);
   // savAdj = ahorros previos en USD (siempre USD)
   const [savAdj, setSavAdj] = useState(()=>parseFloat(ls.getItem('mf_sav_adj')||'0'));
@@ -1727,19 +1727,45 @@ function SavingsGoals({ rate, year, month }) {
     setForm({name:'',target:'',currency:'ARS'});
   };
 
-  const addDeposit = (gid, type='dep') => {
-    const df = depForms[gid]||{amount:'',currency:'ARS',desc:''};
-    if(!df.amount||parseFloat(df.amount)<=0) return;
-    const amt = type==='ret' ? -parseFloat(df.amount) : parseFloat(df.amount);
+  // depRate: tipo de cambio propio del depósito en USD (si no, se usa el dólar ahorro)
+  const makeDeposit = (gid, amount, currency, desc, type='dep', depRate=null) => {
+    const amt = type==='ret' ? -amount : amount;
     const depDate = String(year)+'-'+String(month+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0');
     const depId = uid();
     const goal = goals.find(g=>g.id===gid);
-    save(goals.map(g=>g.id===gid?{...g,deposits:[...(g.deposits||[]),{id:depId,amount:amt,currency:df.currency||'ARS',date:depDate,desc:df.desc||''}]}:g));
+    const dep = {id:depId,amount:amt,currency,date:depDate,desc:desc||''};
+    if(currency==='USD'&&depRate) dep.rate = depRate;
+    save(goals.map(g=>g.id===gid?{...g,deposits:[...(g.deposits||[]),dep]}:g));
     // Crear transacción en movimientos
     const txList = gTx(year,month);
-    const txDesc = df.desc || (goal ? goal.name : 'Meta');
-    sTx(year,month,[...txList,{id:uid(),type:type==='ret'?'income':'expense',desc:txDesc,amount:parseFloat(df.amount),currency:df.currency||'ARS',category:'Ahorro',date:depDate,fromGoal:depId}]);
+    const txDesc = desc || (goal ? goal.name : 'Meta');
+    sTx(year,month,[...txList,{id:uid(),type:type==='ret'?'income':'expense',desc:txDesc,amount,currency,category:'Ahorro',date:depDate,fromGoal:depId}]);
+  };
+  const addDeposit = (gid, type='dep') => {
+    const df = depForms[gid]||{amount:'',currency:'ARS',desc:''};
+    if(!df.amount||parseFloat(df.amount)<=0) return;
+    makeDeposit(gid, parseFloat(df.amount), df.currency||'ARS', df.desc, type);
     setDep(f=>({...f,[gid]:{amount:'',currency:df.currency||'ARS',desc:''}}));
+  };
+
+  // Disponible para ahorrar (sugerencia): presupuesto libre − gastos del mes que no van a tarjeta
+  const sumMes = calcSummary(year,month,gRate());
+  const disponible = sumMes.presupuestoLibre - sumMes.varExpNonTDC;
+  const [cargar, setCargar] = useState(null); // {gid, currency, tc, amount}
+  const abrirCargar = () => {
+    const g0 = goals.find(g=>g.name!=='Bank of america'&&g.name!=='Bank of America') || goals[0];
+    setCargar({gid:g0?g0.id:'', currency:'ARS', tc:String(gRateSav()), amount:String(Math.max(0,Math.round(disponible)))});
+  };
+  const cambiarMoneda = cur => setCargar(c=>{
+    const tc = parseFloat(c.tc)||gRateSav();
+    const base = Math.max(0,disponible);
+    return {...c, currency:cur, amount: cur==='USD' ? String(Math.floor(base/tc)) : String(Math.round(base))};
+  });
+  const confirmarCargar = () => {
+    const amount = parseFloat(cargar.amount), tc = parseFloat(cargar.tc);
+    if(!cargar.gid||!(amount>0)||(cargar.currency==='USD'&&!(tc>0))) return;
+    makeDeposit(cargar.gid, amount, cargar.currency, 'Ahorro del mes', 'dep', cargar.currency==='USD'?tc:null);
+    setCargar(null);
   };
 
   const delDeposit = (gid,did) => save(goals.map(g=>g.id===gid?{...g,deposits:(g.deposits||[]).filter(d=>d.id!==did)}:g));
@@ -1781,6 +1807,36 @@ function SavingsGoals({ rate, year, month }) {
           </div>
         </div>
       )}
+      <div className="list-section" style={{marginBottom:16,padding:16,borderLeft:'3px solid var(--teal)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
+          <div>
+            <div className="sc-lbl">💡 Disponible para ahorrar · {MONTHS[month]}</div>
+            <div className="sc-val" style={{color:disponible>=0?'var(--teal-dark)':'var(--pink-dark)'}}>{disponible<0?'−':''}{fARS(Math.abs(disponible))}</div>
+            <div className="sc-sub">presupuesto libre {fARS(sumMes.presupuestoLibre)} − gastos sin tarjeta {fARS(sumMes.varExpNonTDC)} · sugerencia</div>
+          </div>
+          {!cargar && goals.length>0 && disponible>0 && <button className="add-btn" style={{width:'auto',padding:'0 16px',background:'var(--teal-dark)'}} onClick={abrirCargar}>Cargar como ahorro</button>}
+        </div>
+        {cargar && (
+          <div className="add-row" style={{marginTop:12,flexWrap:'wrap'}}>
+            <select className="cat-sel" value={cargar.gid} onChange={e=>setCargar(c=>({...c,gid:e.target.value}))}>
+              {goals.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <CurToggle value={cargar.currency} onChange={cambiarMoneda} />
+            {cargar.currency==='USD' && (
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--muted)',fontWeight:600}}>
+                Tipo de cambio
+                <input className="add-inp" type="number" min="0" value={cargar.tc} style={{width:90}}
+                  onChange={e=>{ const tc=e.target.value; setCargar(c=>({...c,tc,amount:String(Math.floor(Math.max(0,disponible)/(parseFloat(tc)||1)))})); }} />
+              </label>
+            )}
+            <input className="add-inp" type="number" min="0" value={cargar.amount} style={{width:130}}
+              onChange={e=>setCargar(c=>({...c,amount:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&confirmarCargar()} />
+            {cargar.currency==='USD' && parseFloat(cargar.amount)>0 && <span style={{fontSize:12,color:'var(--muted)'}}>= {fARS(parseFloat(cargar.amount)*(parseFloat(cargar.tc)||0))}</span>}
+            <button className="add-btn" onClick={confirmarCargar} title="Confirmar" style={{background:'var(--teal-dark)'}}>✓</button>
+            <button className="add-btn" onClick={()=>setCargar(null)} title="Cancelar" style={{background:'var(--muted)'}}>✕</button>
+          </div>
+        )}
+      </div>
       <div className="list-section" style={{marginBottom:16}}>
         <div className="add-row">
           <input className={`add-inp desc${err&&!form.name?' err':''}`}
