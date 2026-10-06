@@ -995,8 +995,43 @@ const gGoals = ()    => { try { return JSON.parse(ls.getItem('mf_goals'))       
 const sGoals = d     => { pushUndo(); ls.setItem('mf_goals', JSON.stringify(d)); notify(); };
 
 const gRate      = ()  => parseFloat(ls.getItem('mf_rate')      || '1150');
-const gTDCLimits = ()  => { try { return JSON.parse(ls.getItem('mf_tdc_limits')||'null') || {naranja:700000,santander:700000,galicia:1000000}; } catch { return {naranja:700000,santander:700000,galicia:1000000}; } };
-const sTDCLimits = d   => { ls.setItem('mf_tdc_limits', JSON.stringify(d)); notify(); };
+// ── VALORES POR MES CON ARRASTRE HACIA ADELANTE ──
+// Un cambio en (y,m) vale para ese mes y los siguientes, nunca para los anteriores.
+const ymKey = (y,m) => y*12+m;
+const monthOverrides = prefix => {
+  const out = [];
+  try { for(let i=0;i<window.localStorage.length;i++){ const k=window.localStorage.key(i); const mt=k&&k.match(new RegExp('^'+prefix+'(\\d+)_(\\d+)$')); if(mt) out.push({k, ym:ymKey(+mt[1],+mt[2])}); } } catch(e){}
+  return out.sort((a,b)=>a.ym-b.ym);
+};
+// Valor vigente en (y,m): el último override en o antes de ese mes
+const lastOverride = (prefix,y,m) => {
+  const t = ymKey(y,m); let found = null;
+  monthOverrides(prefix).forEach(o=>{ if(o.ym<=t) found=o; });
+  if(!found) return null;
+  try { return JSON.parse(ls.getItem(found.k)); } catch { return null; }
+};
+
+const TDC_DEFAULT = {naranja:700000,santander:700000,galicia:1000000};
+const gTDCBase = () => { try { return JSON.parse(ls.getItem('mf_tdc_limits')||'null') || TDC_DEFAULT; } catch { return TDC_DEFAULT; } };
+const gTDCLimits = (y,m) => (y===undefined ? null : lastOverride('mf_tdc_lim_',y,m)) || gTDCBase();
+const sTDCLimits = (d,y,m) => {
+  if(y===undefined) { ls.setItem('mf_tdc_limits', JSON.stringify(d)); notify(); return; }
+  // Los meses futuros con valor propio también toman el cambio
+  monthOverrides('mf_tdc_lim_').forEach(o=>{ if(o.ym>ymKey(y,m)) ls.removeItem(o.k); });
+  ls.setItem('mf_tdc_lim_'+y+'_'+m, JSON.stringify(d)); notify();
+};
+// Límite de un presupuesto (en su moneda) vigente en (y,m)
+const bdgLimitRaw = (b,y,m) => {
+  const t = ymKey(y,m); let v = b.limit;
+  monthOverrides('mf_bdg_lim_').forEach(o=>{ if(o.ym<=t){ try { const d=JSON.parse(ls.getItem(o.k)); if(d&&d[b.id]!==undefined) v=d[b.id]; } catch {} } });
+  return v;
+};
+const sBdgLimit = (bid,v,y,m) => {
+  const t = ymKey(y,m);
+  monthOverrides('mf_bdg_lim_').forEach(o=>{ if(o.ym>t){ try { const d=JSON.parse(ls.getItem(o.k))||{}; delete d[bid]; ls.setItem(o.k, JSON.stringify(d)); } catch {} } });
+  const k = 'mf_bdg_lim_'+y+'_'+m; let d = {}; try { d = JSON.parse(ls.getItem(k))||{}; } catch {}
+  d[bid] = v; ls.setItem(k, JSON.stringify(d)); notify();
+};
 const gRateMami  = ()  => parseFloat(ls.getItem('mf_rate_mami') || ls.getItem('mf_rate') || '1150');
 const gRateSav   = ()  => parseFloat(ls.getItem('mf_rate_sav')  || ls.getItem('mf_rate') || '1150');
 const sRateMami  = v   => { ls.setItem('mf_rate_mami', String(v)); notify(); };
@@ -1339,7 +1374,7 @@ function FijosTab({ year, month, rate }) {
     // Si es tarjeta TDC, actualizar límites (mes anterior)
     const cardNameMap = {Naranja:'naranja', Santander:'santander', Galicia:'galicia'};
     const cardKey = cardNameMap[editing.name.trim()];
-    if(cardKey) sTDCLimits({...gTDCLimits(), [cardKey]: parseFloat(editing.amount)});
+    if(cardKey) { const py = month===0?year-1:year, pm = month===0?11:month-1; sTDCLimits({...gTDCLimits(py,pm), [cardKey]: parseFloat(editing.amount)}, py, pm); }
     setEditing(null);
   };
 
@@ -1846,7 +1881,8 @@ function SavingsGoals({ rate, year, month }) {
 
 /* ── SPENDING BUDGETS ── */
 function TDCLimitCards({ year, month }) {
-  const [limits, setLimits] = useState(()=>gTDCLimits());
+  const [limits, setLimits] = useState(()=>gTDCLimits(year,month));
+  useEffect(()=>{ setLimits(gTDCLimits(year,month)); },[year,month]);
   const [editing, setEditing] = useState({});
 
   const update = (card, val) => {
@@ -1854,7 +1890,7 @@ function TDCLimitCards({ year, month }) {
     if(!isNaN(v) && v>=0) {
       const newLimits = {...limits, [card]: v};
       setLimits(newLimits);
-      sTDCLimits(newLimits);
+      sTDCLimits(newLimits, year, month);
       // Propagar al mes siguiente en gastos fijos
       let nextM = month + 1, nextY = year;
       if(nextM > 11) { nextM = 0; nextY++; }
@@ -1958,13 +1994,13 @@ function SpendingBudgets({ year, month, rate }) {
 
   const applyLimit = bid => {
     const v = parseFloat(editLimits[bid]);
-    if(!isNaN(v)&&v>0){ saveBdg(budgets.map(b=>b.id===bid?{...b,limit:v}:b)); }
+    if(!isNaN(v)&&v>0){ sBdgLimit(bid,v,year,month); setBudgets(gSpendBdg()); }
     setEditL(l=>({...l,[bid]:undefined}));
   };
 
   // TDC calculations
   const tdcBudgets   = gSpendBdg().filter(b=>b.tdc);
-  const _tdcLimCards = gTDCLimits();
+  const _tdcLimCards = gTDCLimits(year,month);
   const tdcLimit     = _tdcLimCards.naranja + _tdcLimCards.santander + _tdcLimCards.galicia;
   const tdcSpent     = tdcBudgets.reduce((a,b)=>{
     const man = entries.filter(e=>e.budgetId===b.id).reduce((s,e)=>s+toARS(e.amount,e.currency,rate),0);
@@ -2025,7 +2061,7 @@ function SpendingBudgets({ year, month, rate }) {
                   ) : (
                     <>
                       <div className="spend-pct" style={{color:pct>100?'var(--red)':'var(--teal-dark)'}}>{Math.round(pct)}%</div>
-                      {isSubsBdg(b) ? <span title="Límite calculado desde la tabla de Suscripciones / Servicios / Cuotas" style={{fontSize:11,opacity:.5}}>🔗</span> : <button className="edit-btn" style={{opacity:.35}} onClick={()=>setEditL(l=>({...l,[b.id]:String(b.limit)}))} title="Editar límite">✎</button>}
+                      {isSubsBdg(b) ? <span title="Límite calculado desde la tabla de Suscripciones / Servicios / Cuotas" style={{fontSize:11,opacity:.5}}>🔗</span> : <button className="edit-btn" style={{opacity:.35}} onClick={()=>setEditL(l=>({...l,[b.id]:String(bdgLimitRaw(b,year,month))}))} title="Editar límite">✎</button>}
                       <DelBtn onClick={()=>delBudget(b.id)} />
                     </>
                   )}
@@ -2093,12 +2129,12 @@ function TDCProgressCards({ year, month, rate }) {
     { key: 'galicia',   label: 'Galicia',   color: '#004b8d' },
   ];
 
-  const [limits,  setLimits]  = useState(()=>gTDCLimits());
+  const [limits,  setLimits]  = useState(()=>gTDCLimits(year,month));
   const [entries, setEntries] = useState(()=>gTDCEntries(year,month));
   const [forms,   setForms]   = useState({});
 
-  useEffect(()=>{ setEntries(gTDCEntries(year,month)); setLimits(gTDCLimits()); },[year,month]);
-  useEffect(()=>{ const h=()=>{ setEntries(gTDCEntries(year,month)); setLimits(gTDCLimits()); }; window.addEventListener('data-updated',h); return()=>window.removeEventListener('data-updated',h); },[year,month]);
+  useEffect(()=>{ setEntries(gTDCEntries(year,month)); setLimits(gTDCLimits(year,month)); },[year,month]);
+  useEffect(()=>{ const h=()=>{ setEntries(gTDCEntries(year,month)); setLimits(gTDCLimits(year,month)); }; window.addEventListener('data-updated',h); return()=>window.removeEventListener('data-updated',h); },[year,month]);
 
   const saveEnt = d => { sTDCEntries(year,month,d); setEntries(d); };
 
@@ -2251,7 +2287,7 @@ function MetasTab({ year, month, rate }) {
         const freshEnts = gSpendEnt(year,month);
         const freshTx   = gTx(year,month);
         const tdcBdgs  = budgets.filter(b=>b.tdc);
-        const tdcCards = gTDCLimits();
+        const tdcCards = gTDCLimits(year,month);
         const tdcLim   = tdcCards.naranja + tdcCards.santander + tdcCards.galicia;
         const tdcSpt   = tdcBdgs.reduce((a,b)=>{ const man=freshEnts.filter(e=>e.budgetId===b.id).reduce((s,e)=>s+toARS(e.amount,e.currency,rate),0); const txs=freshTx.filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).reduce((s,t)=>s+toARS(t.amount,t.currency,rate),0); return a+man+txs; },0);
         const tdcP = tdcLim>0?Math.min((tdcSpt/tdcLim)*100,100):tdcBdgs.length>0?0:-1;
@@ -2405,7 +2441,7 @@ const isSubsBdg = b => Object.values(SUBS_BDG).includes(b.name) && ls.getItem('m
 // Límite del presupuesto en ARS para el mes: las tarjetas vinculadas salen de la tabla (sin cuotas vencidas)
 const bdgLimitARS = (b,y,m,rate) => {
   if(isSubsBdg(b)) { const tipo = Object.keys(SUBS_BDG).find(t=>SUBS_BDG[t]===b.name); return subsTotal(gSubs(),tipo,y,m,rate); }
-  return toARS(b.limit,b.currency,rate);
+  return toARS(bdgLimitRaw(b,y,m),b.currency,rate);
 };
 const syncSubsBudgets = (items, rate) => {
   let bdgs = gSpendBdg(), changed = false;
