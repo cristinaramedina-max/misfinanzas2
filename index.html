@@ -2326,6 +2326,104 @@ function MetasTab({ year, month, rate }) {
   );
 }
 
+/* ── SUSCRIPCIONES / SERVICIOS / CUOTAS ── */
+const SUBS_TIPOS = ['Suscripción','Servicio','Cuota'];
+const SUBS_FILTROS = [['all','Todos'],['Suscripción','Suscripciones'],['Servicio','Servicios'],['Cuota','Cuotas']];
+const SUBS_SEED = [
+  ['Suscripción','La Caja Seguro',20284.2,'ARS','Resumen previo'],
+  ['Suscripción','App Contador',22500,'ARS','Resumen previo'],
+  ['Suscripción','Disney+',23999,'ARS','Galicia'],
+  ['Suscripción','Amazon Prime',5.8,'USD','Resumen previo'],
+  ['Suscripción','Google One',9.99,'USD','Naranja'],
+  ['Suscripción','Apple TV',6.99,'USD','Naranja'],
+  ['Suscripción','Spotify',2.94,'USD','Naranja'],
+  ['Suscripción','ChatGPT',19.99,'USD','Naranja / Galicia; contado una sola vez'],
+  ['Suscripción','Detrics',25,'USD','Galicia; ajustado a USD 25'],
+  ['Suscripción','HBO Max',5.99,'USD','Galicia; contado una sola vez'],
+  ['Suscripción','Google',1.99,'USD','Galicia'],
+  ['Suscripción','Netflix',16.96,'USD','Galicia'],
+  ['Servicio','Personal - consumo/débito',109232.41,'ARS','Santander'],
+  ['Servicio','Personal - cuota 3 de 6',32775.68,'ARS','Santander'],
+  ['Servicio','Claro',22659.98,'ARS','Santander'],
+  ['Servicio','Personal extra',80000,'ARS','Agregado por vos'],
+  ['Servicio','Flow',80200,'ARS','Tablero actual'],
+];
+const gSubs = () => {
+  const raw = ls.getItem('mf_subs');
+  if(raw===null) return SUBS_SEED.map(([tipo,name,amount,currency,note])=>({id:uid(),tipo,name,amount,currency,note}));
+  try { return JSON.parse(raw)||[]; } catch { return []; }
+};
+const sSubs = d => { pushUndo(); ls.setItem('mf_subs', JSON.stringify(d)); notify(); };
+
+function SubsTable({ rate }) {
+  const [items, setItems] = useState(gSubs);
+  const [filtro, setFiltro] = useState('all');
+  const [form, setForm] = useState({tipo:'Suscripción',name:'',amount:'',currency:'ARS',note:''});
+  useEffect(()=>{ if(ls.getItem('mf_subs')===null) ls.setItem('mf_subs', JSON.stringify(items)); },[]);
+
+  const save = d => { sSubs(d); setItems(d); };
+  const add = () => {
+    if(!form.name.trim()||!form.amount||parseFloat(form.amount)<=0) return;
+    save([...items,{id:uid(),tipo:form.tipo,name:form.name.trim(),amount:parseFloat(form.amount),currency:form.currency,note:form.note.trim()}]);
+    setForm(f=>({...f,name:'',amount:'',note:''}));
+  };
+  const visibles = filtro==='all' ? items : items.filter(i=>i.tipo===filtro);
+  const ars = i => toARS(i.amount,i.currency,rate);
+  const total = visibles.reduce((a,i)=>a+ars(i),0);
+  const th = {textAlign:'left',padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:.5,borderBottom:'1.5px solid var(--border)'};
+  const td = {padding:'8px 10px',fontSize:13,borderBottom:'1px solid var(--border)'};
+
+  return (
+    <div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+        {SUBS_FILTROS.map(([k,l])=>{
+          const n = k==='all' ? items.length : items.filter(i=>i.tipo===k).length;
+          return <button key={k} className={`meta-btn${filtro===k?' active':''}`} style={{border:'1.5px solid var(--border)',padding:'6px 14px'}} onClick={()=>setFiltro(k)}>{l} ({n})</button>;
+        })}
+      </div>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'var(--font)'}}>
+          <thead><tr>
+            <th style={th}>Tipo</th><th style={th}>Concepto</th><th style={{...th,textAlign:'right'}}>Monto</th>
+            <th style={{...th,textAlign:'right'}}>Equiv. ARS</th><th style={th}>Origen / nota</th><th style={th}></th>
+          </tr></thead>
+          <tbody>
+            {visibles.map(i=>(
+              <tr key={i.id}>
+                <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.tipo}</td>
+                <td style={{...td,fontWeight:700}}>{i.name}</td>
+                <td style={{...td,textAlign:'right'}}>{fCur(i.amount,i.currency)}</td>
+                <td style={{...td,textAlign:'right',fontWeight:700}}>{fARS(ars(i))}</td>
+                <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.note}</td>
+                <td style={{...td,width:30}}><DelBtn onClick={()=>save(items.filter(x=>x.id!==i.id))} /></td>
+              </tr>
+            ))}
+            {visibles.length===0 && <tr><td colSpan={6} style={{...td,textAlign:'center',color:'var(--muted)'}}>Sin datos</td></tr>}
+          </tbody>
+          <tfoot><tr>
+            <td colSpan={3} style={{...td,fontWeight:800,borderBottom:'none'}}>Total {filtro==='all'?'':SUBS_FILTROS.find(f=>f[0]===filtro)[1].toLowerCase()}</td>
+            <td style={{...td,textAlign:'right',fontWeight:800,color:'var(--pink-dark)',borderBottom:'none'}}>{fARS(total)}</td>
+            <td colSpan={2} style={{...td,borderBottom:'none',color:'var(--muted)',fontSize:11}}>USD a {fARS(rate)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+      <div className="add-row" style={{marginTop:12,flexWrap:'wrap'}}>
+        <select className="cat-sel" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}>
+          {SUBS_TIPOS.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <input className="add-inp" placeholder="Concepto..." value={form.name} style={{flex:2,minWidth:140}}
+          onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&add()} />
+        <input className="add-inp" type="number" min="0" placeholder="Monto" value={form.amount} style={{flex:1,minWidth:90}}
+          onChange={e=>setForm(f=>({...f,amount:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&add()} />
+        <CurToggle value={form.currency} onChange={c=>setForm(f=>({...f,currency:c}))} />
+        <input className="add-inp" placeholder="Origen / nota" value={form.note} style={{flex:1.5,minWidth:120}}
+          onChange={e=>setForm(f=>({...f,note:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&add()} />
+        <button className="add-btn" onClick={add} title="Agregar">+</button>
+      </div>
+    </div>
+  );
+}
+
 /* ── STATS TAB ── */
 function StatsTab({ year, month, rate }) {
   const donutRef = useRef(null);
@@ -2333,6 +2431,7 @@ function StatsTab({ year, month, rate }) {
   const hbarRef  = useRef(null);
   const tdcRef   = useRef(null);
   const charts   = useRef({});
+  const [desgloseView, setDesgloseView] = useState('chart');
 
   const { income, fijos, varExp, libre, balance, savings, presupuestoLibre } = calcSummary(year,month,rate);
   const savingRate = income>0 ? ((savings/income)*100).toFixed(1) : 0;
@@ -2468,8 +2567,17 @@ function StatsTab({ year, month, rate }) {
 
       <div style={{marginTop:16}}>
         <div className="chart-card">
-          <div className="chart-title">Desglose por gastos particulares</div>
-          <canvas ref={tdcRef} style={{maxHeight:320}}></canvas>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}}>
+            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Desglose por gastos particulares':'Suscripciones, servicios y cuotas'}</div>
+            <div className="meta-toggle" style={{margin:0}}>
+              <button className={`meta-btn${desgloseView==='chart'?' active':''}`} onClick={()=>setDesgloseView('chart')}>📊 Gráfico</button>
+              <button className={`meta-btn${desgloseView==='subs'?' active':''}`} onClick={()=>setDesgloseView('subs')}>📋 Tabla</button>
+            </div>
+          </div>
+          <div style={{display:desgloseView==='chart'?'block':'none'}}>
+            <canvas ref={tdcRef} style={{maxHeight:320}}></canvas>
+          </div>
+          {desgloseView==='subs' && <SubsTable rate={rate} />}
         </div>
       </div>
     </div>
