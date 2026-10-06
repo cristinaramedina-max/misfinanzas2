@@ -1055,6 +1055,7 @@ const sSpendEnt  = (y,m,d)  => { pushUndo(); ls.setItem(`mf_sent_${y}_${m}`, JSO
 /* ── HELPERS ── */
 const uid   = () => Math.random().toString(36).slice(2,9);
 // Fecha local (toISOString usa UTC y después de las 21 h en Argentina da el día siguiente)
+const fechaEnMes = (y,m) => { const dd = Math.min(new Date().getDate(), new Date(y,m+1,0).getDate()); return y+'-'+String(m+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0'); };
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 const fmtD  = s  => { if(!s)return''; const[,m,d]=s.split('-'); return `${d}/${m}`; };
 const fARS  = n  => '$\u202f' + Math.abs(n).toLocaleString('es-AR',{maximumFractionDigits:0});
@@ -1516,12 +1517,12 @@ function FijosTab({ year, month, rate }) {
 /* ── MOVIMIENTOS TAB ── */
 function MovimientosTab({ year, month, rate }) {
   const [items,   setItems]   = useState(()=>gTx(year,month));
-  const [form,    setForm]    = useState({type:'expense',desc:'',amount:'',currency:'ARS',category:'Comida',date:today()});
+  const [form,    setForm]    = useState({type:'expense',desc:'',amount:'',currency:'ARS',category:'Comida',date:fechaEnMes(year,month)});
   const [filter,  setFilter]  = useState('all');
   const [err,     setErr]     = useState(false);
   const [editing, setEditing] = useState(null); // { id, desc, amount, currency }
 
-  useEffect(()=>{ seedMonthIfEmpty(year,month); setItems(gTx(year,month)); setEditing(null); },[year,month]);
+  useEffect(()=>{ seedMonthIfEmpty(year,month); setItems(gTx(year,month)); setEditing(null); setForm(f=>({...f,date:fechaEnMes(year,month)})); },[year,month]);
 
   const save = d => { sTx(year,month,d); setItems(d); };
   const del  = id => save(items.filter(i=>i.id!==id));
@@ -1537,14 +1538,10 @@ function MovimientosTab({ year, month, rate }) {
     if(!form.desc.trim()||!form.amount||parseFloat(form.amount)<=0){ setErr(true); return; }
     setErr(false);
     const cat = form.type==='income' ? (CATS_INC.includes(form.category)?form.category:'Sueldo') : form.category;
-    // Save to the month of the chosen date, not necessarily the current viewed month
-    // Año y mes leídos del texto: new Date('YYYY-MM-DD') es UTC y en Argentina cae en el mes anterior
-    const [ty, tm1] = form.date.split('-').map(Number), tm = tm1-1;
-    const targetTx = gTx(ty, tm);
-    sTx(ty, tm, [...targetTx, {id:uid(),type:form.type,desc:form.desc.trim(),amount:parseFloat(form.amount),currency:form.currency,category:cat,date:form.date}]);
-    // Refresh local items if same month
-    if(ty===year && tm===month) setItems(gTx(year,month));
-    notify();
+    // Siempre se guarda en el mes elegido a la izquierda; si la fecha es de otro mes, se lleva a este mes (mismo día)
+    const dia = Math.min(parseInt(form.date.split('-')[2])||1, new Date(year,month+1,0).getDate());
+    const fecha = year+'-'+String(month+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+    save([...gTx(year,month), {id:uid(),type:form.type,desc:form.desc.trim(),amount:parseFloat(form.amount),currency:form.currency,category:cat,date:fecha}]);
     setForm(f=>({...f,desc:'',amount:''}));
   };
 
