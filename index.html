@@ -2562,6 +2562,7 @@ function StatsTab({ year, month, rate }) {
     const bytdc = {};
     bdgs.forEach(b=>{ const l=bdgLimitARS(b,year,month,rate); if(l>0) bytdc[b.name]=(bytdc[b.name]||0)+l; });
     const tdcE = Object.entries(bytdc).sort((a,b)=>b[1]-a[1]);
+    const tdcTotal = tdcE.reduce((a,[,v])=>a+v,0);
 
     const months6=[],inc6=[],exp6=[];
     for(let i=5;i>=0;i--){
@@ -2608,8 +2609,11 @@ function StatsTab({ year, month, rate }) {
       const tdcColors = ['#7c6af7','#e8615a','#f0c05a','#5ec98a','#f4a7c3','#7dd3d8','#f9c784','#b09fdc','#98d4b0','#c8a87e'];
       charts.current.tdc = new Chart(tdcRef.current,{
         type:'doughnut',
-        data:{labels:tdcE.map(([c])=>c),datasets:[{data:tdcE.map(([,v])=>v),backgroundColor:tdcE.map((_,i)=>tdcColors[i%tdcColors.length]),borderWidth:3,borderColor:'#fff'}]},
-        options:{plugins:{legend:{position:'right',labels:{color:'#3a2a50',font:{family:'Outfit',size:12,weight:'600'},padding:14}}},cutout:'55%'}
+        data:{labels:tdcE.map(([c,v])=>`${c}   ${fARS(v)} · ${tdcTotal>0?Math.round(v/tdcTotal*100):0}%`),datasets:[{data:tdcE.map(([,v])=>v),backgroundColor:tdcE.map((_,i)=>tdcColors[i%tdcColors.length]),borderWidth:3,borderColor:'#fff'}]},
+        options:{plugins:{
+          legend:{position:'right',labels:{color:'#3a2a50',font:{family:'Outfit',size:12,weight:'600'},padding:14}},
+          tooltip:{callbacks:{label:c=>' '+tdcE[c.dataIndex][0]+': '+fARS(c.raw)}}
+        },cutout:'55%'}
       });
     }
     return ()=>Object.values(charts.current).forEach(c=>{try{c.destroy();}catch{}});
@@ -2673,7 +2677,7 @@ function StatsTab({ year, month, rate }) {
       <div style={{marginTop:16}}>
         <div className="chart-card">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}}>
-            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Presupuestado por categoría':'Suscripciones, servicios y cuotas'}</div>
+            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Presupuestado por categoría':'Suscripciones, servicios y cuotas'}{desgloseView==='chart' && <span style={{marginLeft:8,color:'var(--teal-dark)',textTransform:'none'}}>· Total {fARS(gSpendBdg().reduce((t,b)=>t+bdgLimitARS(b,year,month,rate),0))}</span>}</div>
             <div className="meta-toggle" style={{margin:0}}>
               <button className={`meta-btn${desgloseView==='chart'?' active':''}`} onClick={()=>setDesgloseView('chart')}>📊 Gráfico</button>
               <button className={`meta-btn${desgloseView==='subs'?' active':''}`} onClick={()=>setDesgloseView('subs')}>📋 Tabla</button>
