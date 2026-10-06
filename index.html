@@ -2328,7 +2328,18 @@ function MetasTab({ year, month, rate }) {
 
 /* ── SUSCRIPCIONES / SERVICIOS / CUOTAS ── */
 // Estado de UI que sobrevive a los remounts por refreshKey
-const __uiMem = { desgloseView:'chart', subsFiltro:'all' };
+const __uiMem = { desgloseView:'chart', subsFiltro:'all', chartModo:'todas' };
+// Límites presupuestados del mes según la vista del gráfico: todas, solo TDC, o agrupado TDC / pesos del mes
+const presupuestadoPor = (modo,y,m,rate) => {
+  const out = {};
+  gSpendBdg().forEach(b=>{
+    const l = bdgLimitARS(b,y,m,rate); if(!(l>0)) return;
+    if(modo==='tdc' && !b.tdc) return;
+    const k = modo==='grupo' ? (b.tdc?'💳 Tarjeta de crédito':'💵 Pesos del mes') : b.name;
+    out[k] = (out[k]||0) + l;
+  });
+  return out;
+};
 const SUBS_TIPOS = ['Suscripción','Servicio','Cuota'];
 const SUBS_FILTROS = [['all','Todos'],['Suscripción','Suscripciones'],['Servicio','Servicios'],['Cuota','Cuotas']];
 const SUBS_SEED = [
@@ -2536,6 +2547,8 @@ function StatsTab({ year, month, rate }) {
   const hbarRef  = useRef(null);
   const tdcRef   = useRef(null);
   const charts   = useRef({});
+  const [chartModo, _setChartModo] = useState(()=>__uiMem.chartModo);
+  const setChartModo = v => { __uiMem.chartModo = v; _setChartModo(v); };
   const [desgloseView, _setDesgloseView] = useState(()=>__uiMem.desgloseView);
   const setDesgloseView = v => { __uiMem.desgloseView = v; _setDesgloseView(v); };
 
@@ -2559,8 +2572,7 @@ function StatsTab({ year, month, rate }) {
     const catE = Object.entries(bycat).sort((a,b)=>b[1]-a[1]);
 
     // Desglose de lo presupuestado: límite mensual de cada presupuesto
-    const bytdc = {};
-    bdgs.forEach(b=>{ const l=bdgLimitARS(b,year,month,rate); if(l>0) bytdc[b.name]=(bytdc[b.name]||0)+l; });
+    const bytdc = presupuestadoPor(chartModo,year,month,rate);
     const tdcE = Object.entries(bytdc).sort((a,b)=>b[1]-a[1]);
     const tdcTotal = tdcE.reduce((a,[,v])=>a+v,0);
 
@@ -2635,7 +2647,7 @@ function StatsTab({ year, month, rate }) {
       });
     }
     return ()=>Object.values(charts.current).forEach(c=>{try{c.destroy();}catch{}});
-  },[year,month,rate]);
+  },[year,month,rate,chartModo]);
 
   const tx    = gTx(year,month);
   const fx2   = gFx(year,month);
@@ -2695,13 +2707,18 @@ function StatsTab({ year, month, rate }) {
       <div style={{marginTop:16}}>
         <div className="chart-card">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8,marginBottom:12}}>
-            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Presupuestado por categoría':'Suscripciones, servicios y cuotas'}{desgloseView==='chart' && <span style={{marginLeft:8,color:'var(--teal-dark)',textTransform:'none'}}>· Total {fARS(gSpendBdg().reduce((t,b)=>t+bdgLimitARS(b,year,month,rate),0))}</span>}</div>
+            <div className="chart-title" style={{margin:0}}>{desgloseView==='chart'?'Presupuestado por categoría':'Suscripciones, servicios y cuotas'}{desgloseView==='chart' && <span style={{marginLeft:8,color:'var(--teal-dark)',textTransform:'none'}}>· Total {fARS(Object.values(presupuestadoPor(chartModo,year,month,rate)).reduce((a,v)=>a+v,0))}</span>}</div>
             <div className="meta-toggle" style={{margin:0}}>
               <button className={`meta-btn${desgloseView==='chart'?' active':''}`} onClick={()=>setDesgloseView('chart')}>📊 Gráfico</button>
               <button className={`meta-btn${desgloseView==='subs'?' active':''}`} onClick={()=>setDesgloseView('subs')}>📋 Tabla</button>
             </div>
           </div>
           <div style={{display:desgloseView==='chart'?'block':'none'}}>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+              {[['todas','Todas'],['tdc','💳 Solo tarjeta'],['grupo','🗂 Tarjeta vs pesos del mes']].map(([k,l])=>(
+                <button key={k} className={`meta-btn${chartModo===k?' active':''}`} style={{border:'1.5px solid var(--border)',padding:'6px 14px'}} onClick={()=>setChartModo(k)}>{l}</button>
+              ))}
+            </div>
             <canvas ref={tdcRef} style={{maxHeight:420}}></canvas>
           </div>
           {desgloseView==='subs' && <SubsTable rate={rate} year={year} month={month} />}
