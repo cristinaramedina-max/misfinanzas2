@@ -2460,10 +2460,11 @@ function SubsTable({ rate }) {
                 <td style={{...td,textAlign:'right'}}>{fCur(i.amount,i.currency)}</td>
                 <td style={{...td,textAlign:'right',fontWeight:700}}>{fARS(ars(i))}</td>
                 <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.note}</td>
-                <td style={{...td,whiteSpace:'nowrap',width:60}}>
+                <td style={{...td,whiteSpace:'nowrap',width:150,textAlign:'right'}}>
                   <button onClick={()=>setEdit({...i,amount:String(i.amount)})} title="Editar"
-                    style={{background:'none',border:'none',cursor:'pointer',fontSize:13,opacity:.6,padding:'0 6px'}}>✏️</button>
-                  <DelBtn onClick={()=>{ if(confirm(`¿Eliminar "${i.name}"?`)) save(items.filter(x=>x.id!==i.id)); }} />
+                    style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'var(--font)',fontSize:11,fontWeight:700,color:'var(--ink2)',padding:'4px 8px',marginRight:4}}>✏️ Editar</button>
+                  <button onClick={()=>{ if(confirm(`¿Eliminar "${i.name}"?`)) save(items.filter(x=>x.id!==i.id)); }} title="Eliminar"
+                    style={{background:'var(--red-light)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'var(--font)',fontSize:11,fontWeight:700,color:'var(--pink-dark)',padding:'4px 8px'}}>🗑 Eliminar</button>
                 </td>
               </tr>
             ))}
