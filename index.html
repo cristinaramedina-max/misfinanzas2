@@ -1323,7 +1323,7 @@ function ResumenTab({ year, month, rate }) {
           <div className="goals-grid">
             {d.cuentas.map(c=>{ const ap=aportesCuenta(d,c.id); const mio=c.titulares.filter(t=>t.mio).reduce((a,t)=>a+t.amount,0)+ap; const fam=c.titulares.filter(t=>!t.mio).reduce((a,t)=>a+t.amount,0); return (
               <div key={c.id} className="goal-card">
-                <div className="goal-top"><div><div className="goal-name">{c.name}</div><div className="goal-target">Mío {fUSD(mio)} · Familia {fUSD(fam)}</div></div><div className="goal-pct">{fUSD(mio+fam)}</div></div>
+                <div className="goal-top"><div><div className="goal-name">{c.name}</div><div className="goal-target">Familia {fUSD(fam)} · total {fUSD(mio+fam)}</div></div><div className="goal-pct">{fUSD(mio)}</div></div>
               </div>
             ); })}
           </div>
@@ -1734,9 +1734,9 @@ function CuentaAhorro({ c, aportes, onSave }) {
     <div className="list-section" style={{padding:16,flex:'1 1 320px',minWidth:0}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
         <div style={{fontWeight:800,fontSize:15}}>{c.name}</div>
-        <div style={{fontWeight:900,fontSize:20,color:'var(--teal-dark)'}}>{fUSD(mio+fam)}</div>
+        <div style={{fontWeight:900,fontSize:20,color:'var(--teal-dark)'}}>{fUSD(mio)}</div>
       </div>
-      <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:10}}>Mío {fUSD(mio)} · Familia {fUSD(fam)}</div>
+      <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:10}}>Familia {fUSD(fam)} · total en la cuenta {fUSD(mio+fam)}</div>
       {c.titulares.map(t=>(
         <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderTop:'1px solid var(--border)'}}>
           <span style={{flex:1,fontWeight:t.mio?800:600}}>{t.mio?'⭐ Mío':'👪 '+t.name}</span>
@@ -1796,8 +1796,8 @@ function AhorrosModule({ year, month }) {
       <div className="total-ahorros-card">
         <div style={{flex:1}}>
           <div className="ta-label">Mis ahorros</div>
-          <div className="ta-val">{fUSD(totMio+totFam)}</div>
-          <div className="ta-sub">⭐ Mío {fUSD(totMio)} · 👪 Familia {fUSD(totFam)} · ≈ {fARS((totMio+totFam)*rSav)}</div>
+          <div className="ta-val">{fUSD(totMio)}</div>
+          <div className="ta-sub">≈ {fARS(totMio*rSav)} · además hay {fUSD(totFam)} de la familia (total en cuentas {fUSD(totMio+totFam)})</div>
         </div>
       </div>
 
