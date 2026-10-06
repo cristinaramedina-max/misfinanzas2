@@ -1243,9 +1243,8 @@ function ResumenTab({ year, month, rate }) {
   const barColor = libreUsedPct>=100?'var(--red)':libreUsedPct>=80?'var(--gold)':'var(--teal)';
 
   const incUSD = tx.filter(t=>t.type==='income'&&t.currency==='USD').reduce((a,t)=>a+t.amount,0);
-  const expUSD = tx.filter(t=>t.type==='expense'&&t.currency==='USD'&&!t.fromGoal&&t.category!=='Ahorro').reduce((a,t)=>a+t.amount,0);
   const fijUSD = fx.filter(f=>f.currency==='USD').reduce((a,f)=>a+f.amount,0);
-  const hasUSD = incUSD>0||expUSD>0||fijUSD>0;
+  const hasUSD = incUSD>0||fijUSD>0;
   const fijUnpaid = fx.filter(f=>!f.paid).length;
 
   return (
@@ -1296,7 +1295,6 @@ function ResumenTab({ year, month, rate }) {
         <div className="usd-strip">
           {incUSD>0 && <div className="usd-item"><div className="sc-lbl">Ingresos USD</div><div className="sc-val usd">{fUSD(incUSD)}</div></div>}
           {fijUSD>0 && <div className="usd-item"><div className="sc-lbl">Fijos USD</div><div className="sc-val" style={{color:'var(--pink-dark)',fontSize:18,fontWeight:800}}>{fUSD(fijUSD)}</div></div>}
-          {expUSD>0 && <div className="usd-item"><div className="sc-lbl">Variables USD</div><div className="sc-val" style={{color:'var(--pink-dark)',fontSize:18,fontWeight:800}}>{fUSD(expUSD)}</div></div>}
           <div style={{marginLeft:'auto',fontSize:11,color:'var(--usd-dark)',fontWeight:700,opacity:.7}}>TC $1 = {fARS(rate)}</div>
         </div>
       )}
