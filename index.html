@@ -1998,7 +1998,7 @@ function SpendingBudgets({ year, month, rate }) {
           const bTxRows  = gTx(year,month).filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).sort((a,b)=>new Date(b.date)-new Date(a.date));
           const txSpent  = bTxRows.reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
           const spent    = bEntries.reduce((a,e)=>a+toARS(e.amount,e.currency,rate),0) + txSpent;
-          const limit    = toARS(b.limit,b.currency,rate);
+          const limit    = bdgLimitARS(b,year,month,rate);
           const pct      = limit>0?(spent/limit)*100:0;
           const barColor = pct>100?'var(--red)':'var(--teal-dark)';
           const ef       = entForms[b.id]||{amount:'',currency:'ARS',note:''};
@@ -2025,7 +2025,7 @@ function SpendingBudgets({ year, month, rate }) {
                   ) : (
                     <>
                       <div className="spend-pct" style={{color:pct>100?'var(--red)':'var(--teal-dark)'}}>{Math.round(pct)}%</div>
-                      <button className="edit-btn" style={{opacity:.35}} onClick={()=>setEditL(l=>({...l,[b.id]:String(b.limit)}))} title="Editar límite">✎</button>
+                      {isSubsBdg(b) ? <span title="Límite calculado desde la tabla de Suscripciones / Servicios / Cuotas" style={{fontSize:11,opacity:.5}}>🔗</span> : <button className="edit-btn" style={{opacity:.35}} onClick={()=>setEditL(l=>({...l,[b.id]:String(b.limit)}))} title="Editar límite">✎</button>}
                       <DelBtn onClick={()=>delBudget(b.id)} />
                     </>
                   )}
@@ -2073,7 +2073,7 @@ function SpendingBudgets({ year, month, rate }) {
                   </div>
                 </div>
               </div>
-                <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:6,textAlign:'center'}}>Límite: {fCur(b.limit,b.currency)}</div>
+                <div style={{fontSize:11,color:'var(--muted)',fontWeight:600,marginBottom:6,textAlign:'center'}}>Límite: {fARS(bdgLimitARS(b,year,month,rate))}</div>
             </div>
           );
         })}
@@ -2209,7 +2209,7 @@ function MetasTab({ year, month, rate }) {
     const manual = entries.filter(e=>e.budgetId===b.id).reduce((a,e)=>a+toARS(e.amount,e.currency,rate),0);
     const txs    = gTx(year,month).filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).reduce((a,t)=>a+toARS(t.amount,t.currency,rate),0);
     const spent  = manual + txs;
-    const limit  = toARS(b.limit, b.currency, rate);
+    const limit  = bdgLimitARS(b,year,month,rate);
     const pct    = limit>0 ? (spent/limit)*100 : 0;
     return { id:b.id, name:b.name, tdc:b.tdc, pct, over: pct>100 };
   });
@@ -2236,7 +2236,7 @@ function MetasTab({ year, month, rate }) {
       </div>
 
       {mode==='gastos' && (() => {
-        const totalLimit  = budgets.reduce((a,b)=>a+toARS(b.limit,b.currency,rate),0);
+        const totalLimit  = budgets.reduce((a,b)=>a+bdgLimitARS(b,year,month,rate),0);
         const totalSpent  = budgets.reduce((a,b)=>{
           const manual = entries.filter(e=>e.budgetId===b.id).reduce((s,e)=>s+toARS(e.amount,e.currency,rate),0);
           const txs    = gTx(year,month).filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).reduce((s,t)=>s+toARS(t.amount,t.currency,rate),0);
@@ -2256,7 +2256,7 @@ function MetasTab({ year, month, rate }) {
         const tdcSpt   = tdcBdgs.reduce((a,b)=>{ const man=freshEnts.filter(e=>e.budgetId===b.id).reduce((s,e)=>s+toARS(e.amount,e.currency,rate),0); const txs=freshTx.filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).reduce((s,t)=>s+toARS(t.amount,t.currency,rate),0); return a+man+txs; },0);
         const tdcP = tdcLim>0?Math.min((tdcSpt/tdcLim)*100,100):tdcBdgs.length>0?0:-1;
         const pesosBdgs = budgets.filter(b=>!b.tdc);
-        const pesosLim  = pesosBdgs.reduce((a,b)=>a+toARS(b.limit,b.currency,rate),0);
+        const pesosLim  = pesosBdgs.reduce((a,b)=>a+bdgLimitARS(b,year,month,rate),0);
         const pesosSpt  = pesosBdgs.reduce((a,b)=>{ const man=freshEnts.filter(e=>e.budgetId===b.id).reduce((s,e)=>s+toARS(e.amount,e.currency,rate),0); const txs=freshTx.filter(t=>t.type==='expense'&&t.category===b.name&&!t.fromMeta).reduce((s,t)=>s+toARS(t.amount,t.currency,rate),0); return a+man+txs; },0);
         const pesosP = pesosLim>0?Math.min((pesosSpt/pesosLim)*100,100):pesosBdgs.length>0?0:-1;
 
@@ -2376,10 +2376,31 @@ const gSubs = () => {
 const sSubs = d => { pushUndo(); ls.setItem('mf_subs', JSON.stringify(d)); notify(); };
 // Cada tipo de la tabla define el límite presupuestado de su tarjeta en Presupuestos
 const SUBS_BDG = { 'Suscripción':'Suscripciones', 'Servicio':'Servicios', 'Cuota':'Cuotas' };
+// Último mes de una cuota como 'YYYY-MM' (campo last, o leído de la nota "última Oct-2026")
+const MES_ABR = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+const cuotaLast = i => {
+  if(i.last) return i.last;
+  const mt = /última\s+([a-zA-Z]{3})-(\d{4})/.exec(i.note||'');
+  const mm = mt && MES_ABR[mt[1].toLowerCase()];
+  return mm ? `${mt[2]}-${String(mm).padStart(2,'0')}` : null;
+};
+const subsActiva = (i,y,m) => {
+  if(i.tipo!=='Cuota') return true;
+  const last = cuotaLast(i);
+  return !last || `${y}-${String(m+1).padStart(2,'0')}` <= last;
+};
+const subsTotal = (items,tipo,y,m,rate) => Math.round(items.filter(i=>i.tipo===tipo&&subsActiva(i,y,m)).reduce((a,i)=>a+toARS(i.amount,i.currency,rate),0));
+const isSubsBdg = b => Object.values(SUBS_BDG).includes(b.name) && ls.getItem('mf_subs')!==null;
+// Límite del presupuesto en ARS para el mes: las tarjetas vinculadas salen de la tabla (sin cuotas vencidas)
+const bdgLimitARS = (b,y,m,rate) => {
+  if(isSubsBdg(b)) { const tipo = Object.keys(SUBS_BDG).find(t=>SUBS_BDG[t]===b.name); return subsTotal(gSubs(),tipo,y,m,rate); }
+  return toARS(b.limit,b.currency,rate);
+};
 const syncSubsBudgets = (items, rate) => {
   let bdgs = gSpendBdg(), changed = false;
+  const hoy = new Date();
   Object.entries(SUBS_BDG).forEach(([tipo,name])=>{
-    const limit = Math.round(items.filter(i=>i.tipo===tipo).reduce((a,i)=>a+toARS(i.amount,i.currency,rate),0));
+    const limit = subsTotal(items,tipo,hoy.getFullYear(),hoy.getMonth(),rate);
     const b = bdgs.find(b=>b.name===name);
     if(b) { if(b.limit!==limit||b.currency!=='ARS') { bdgs = bdgs.map(x=>x.id===b.id?{...x,limit,currency:'ARS'}:x); changed = true; } }
     else if(limit>0) { bdgs = [...bdgs,{id:uid(),name,limit,currency:'ARS',tdc:true}]; changed = true; }
@@ -2387,11 +2408,11 @@ const syncSubsBudgets = (items, rate) => {
   if(changed) sSpendBdg(bdgs);
 };
 
-function SubsTable({ rate }) {
+function SubsTable({ rate, year, month }) {
   const [items, setItems] = useState(gSubs);
   const [filtro, _setFiltro] = useState(()=>__uiMem.subsFiltro);
   const setFiltro = v => { __uiMem.subsFiltro = v; _setFiltro(v); };
-  const [form, setForm] = useState({tipo:'Suscripción',name:'',amount:'',currency:'ARS',note:''});
+  const [form, setForm] = useState({tipo:'Suscripción',name:'',amount:'',currency:'ARS',note:'',last:''});
   const [edit, setEdit] = useState(null); // fila en edición
   useEffect(()=>{
     if(ls.getItem('mf_subs')===null) { ls.setItem('mf_subs', JSON.stringify(items)); ls.setItem('mf_subs_cuotas_v1','1'); }
@@ -2401,15 +2422,18 @@ function SubsTable({ rate }) {
   const save = d => { sSubs(d); setItems(d); syncSubsBudgets(d, rate); };
   const saveEdit = () => {
     if(!edit.name.trim()||!(parseFloat(edit.amount)>0)) return;
-    save(items.map(i=>i.id===edit.id?{...edit,name:edit.name.trim(),amount:parseFloat(edit.amount),note:(edit.note||'').trim()}:i));
+    save(items.map(i=>i.id===edit.id?{...edit,name:edit.name.trim(),amount:parseFloat(edit.amount),note:(edit.note||'').trim(),last:edit.tipo==='Cuota'?(edit.last||null):null}:i));
     setEdit(null);
   };
   const add = () => {
     if(!form.name.trim()||!form.amount||parseFloat(form.amount)<=0) return;
-    save([...items,{id:uid(),tipo:form.tipo,name:form.name.trim(),amount:parseFloat(form.amount),currency:form.currency,note:form.note.trim()}]);
-    setForm(f=>({...f,name:'',amount:'',note:''}));
+    save([...items,{id:uid(),tipo:form.tipo,name:form.name.trim(),amount:parseFloat(form.amount),currency:form.currency,note:form.note.trim(),last:form.tipo==='Cuota'?(form.last||null):null}]);
+    setForm(f=>({...f,name:'',amount:'',note:'',last:''}));
   };
-  const visibles = filtro==='all' ? items : items.filter(i=>i.tipo===filtro);
+  const activos = items.filter(i=>subsActiva(i,year,month));
+  const vencidas = items.length - activos.length;
+  const visibles = filtro==='all' ? activos : activos.filter(i=>i.tipo===filtro);
+  const fmtLast = l => { if(!l) return ''; const [y,m]=l.split('-'); return MONTHS[parseInt(m)-1].slice(0,3)+' '+y; };
   const ars = i => toARS(i.amount,i.currency,rate);
   const total = visibles.reduce((a,i)=>a+ars(i),0);
   const th = {textAlign:'left',padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',letterSpacing:.5,borderBottom:'1.5px solid var(--border)'};
@@ -2419,10 +2443,11 @@ function SubsTable({ rate }) {
     <div>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
         {SUBS_FILTROS.map(([k,l])=>{
-          const n = k==='all' ? items.length : items.filter(i=>i.tipo===k).length;
+          const n = k==='all' ? activos.length : activos.filter(i=>i.tipo===k).length;
           return <button key={k} className={`meta-btn${filtro===k?' active':''}`} style={{border:'1.5px solid var(--border)',padding:'6px 14px'}} onClick={()=>setFiltro(k)}>{l} ({n})</button>;
         })}
       </div>
+      {vencidas>0 && <div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>{vencidas} cuota{vencidas>1?'s':''} ya terminada{vencidas>1?'s':''} en {MONTHS[month]} {year} (no se muestra{vencidas>1?'n':''} ni suma{vencidas>1?'n':''})</div>}
       <div style={{overflowX:'auto'}}>
         <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'var(--font)'}}>
           <thead><tr>
@@ -2446,11 +2471,19 @@ function SubsTable({ rate }) {
                     <CurToggle value={edit.currency} onChange={c=>setEdit(x=>({...x,currency:c}))} />
                   </div>
                 </td>
-                <td style={td}><input className="add-inp" value={edit.note||''} style={{width:'100%',boxSizing:'border-box'}}
-                  onChange={e=>setEdit(x=>({...x,note:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')setEdit(null);}} /></td>
-                <td style={{...td,whiteSpace:'nowrap'}}>
-                  <button className="add-btn" onClick={saveEdit} title="Guardar" style={{background:'var(--teal-dark)'}}>✓</button>{' '}
-                  <button className="add-btn" onClick={()=>setEdit(null)} title="Cancelar" style={{background:'var(--muted)'}}>✕</button>
+                <td style={td}>
+                  <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                    <input className="add-inp" value={edit.note||''} placeholder="Origen / nota" style={{flex:1,minWidth:0}}
+                      onChange={e=>setEdit(x=>({...x,note:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')setEdit(null);}} />
+                    {edit.tipo==='Cuota' && <input className="add-inp" type="month" title="Última cuota" value={edit.last||''} style={{width:140}}
+                      onChange={e=>setEdit(x=>({...x,last:e.target.value}))} />}
+                  </div>
+                </td>
+                <td style={{...td,whiteSpace:'nowrap',textAlign:'right'}}>
+                  <div style={{display:'inline-flex',gap:6,flexWrap:'nowrap'}}>
+                    <button className="add-btn" onClick={saveEdit} title="Guardar" style={{background:'var(--teal-dark)'}}>✓</button>
+                    <button className="add-btn" onClick={()=>setEdit(null)} title="Cancelar" style={{background:'var(--muted)'}}>✕</button>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -2459,9 +2492,9 @@ function SubsTable({ rate }) {
                 <td style={{...td,fontWeight:700}}>{i.name}</td>
                 <td style={{...td,textAlign:'right'}}>{fCur(i.amount,i.currency)}</td>
                 <td style={{...td,textAlign:'right',fontWeight:700}}>{fARS(ars(i))}</td>
-                <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.note}</td>
-                <td style={{...td,whiteSpace:'nowrap',width:150,textAlign:'right'}}>
-                  <button onClick={()=>setEdit({...i,amount:String(i.amount)})} title="Editar"
+                <td style={{...td,color:'var(--muted)',fontSize:12}}>{i.note}{i.tipo==='Cuota'&&i.last&&!/última/.test(i.note||'')?` · última ${fmtLast(i.last)}`:''}</td>
+                <td style={{...td,whiteSpace:'nowrap',width:170,textAlign:'right'}}>
+                  <button onClick={()=>setEdit({...i,amount:String(i.amount),last:cuotaLast(i)||''})} title="Editar"
                     style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'var(--font)',fontSize:11,fontWeight:700,color:'var(--ink2)',padding:'4px 8px',marginRight:4}}>✏️ Editar</button>
                   <button onClick={()=>{ if(confirm(`¿Eliminar "${i.name}"?`)) save(items.filter(x=>x.id!==i.id)); }} title="Eliminar"
                     style={{background:'var(--red-light)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'var(--font)',fontSize:11,fontWeight:700,color:'var(--pink-dark)',padding:'4px 8px'}}>🗑 Eliminar</button>
@@ -2488,6 +2521,8 @@ function SubsTable({ rate }) {
         <CurToggle value={form.currency} onChange={c=>setForm(f=>({...f,currency:c}))} />
         <input className="add-inp" placeholder="Origen / nota" value={form.note} style={{flex:1.5,minWidth:120}}
           onChange={e=>setForm(f=>({...f,note:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&add()} />
+        {form.tipo==='Cuota' && <input className="add-inp" type="month" title="Última cuota" value={form.last} style={{width:150}}
+          onChange={e=>setForm(f=>({...f,last:e.target.value}))} />}
         <button className="add-btn" onClick={add} title="Agregar">+</button>
       </div>
     </div>
@@ -2525,7 +2560,7 @@ function StatsTab({ year, month, rate }) {
 
     // Desglose de lo presupuestado: límite mensual de cada presupuesto
     const bytdc = {};
-    bdgs.forEach(b=>{ if(b.limit>0) bytdc[b.name]=(bytdc[b.name]||0)+toARS(b.limit,b.currency,rate); });
+    bdgs.forEach(b=>{ const l=bdgLimitARS(b,year,month,rate); if(l>0) bytdc[b.name]=(bytdc[b.name]||0)+l; });
     const tdcE = Object.entries(bytdc).sort((a,b)=>b[1]-a[1]);
 
     const months6=[],inc6=[],exp6=[];
@@ -2647,7 +2682,7 @@ function StatsTab({ year, month, rate }) {
           <div style={{display:desgloseView==='chart'?'block':'none'}}>
             <canvas ref={tdcRef} style={{maxHeight:320}}></canvas>
           </div>
-          {desgloseView==='subs' && <SubsTable rate={rate} />}
+          {desgloseView==='subs' && <SubsTable rate={rate} year={year} month={month} />}
         </div>
       </div>
     </div>
