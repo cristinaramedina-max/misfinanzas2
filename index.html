@@ -1325,7 +1325,8 @@ function ResumenTab({ year, month, rate }) {
           <div className="goals-grid">
             {d.cuentas.map(c=>{ const ap=aportesCuenta(d,c.id); const mio=c.titulares.filter(t=>t.mio).reduce((a,t)=>a+t.amount,0)+ap; const fam=c.titulares.filter(t=>!t.mio).reduce((a,t)=>a+t.amount,0); return (
               <div key={c.id} className="goal-card">
-                <div className="goal-top"><div><div className="goal-name">{c.name}</div><div className="goal-target">Familia {fUSD(fam)} · total {fUSD(mio+fam)}</div></div><div className="goal-pct">{fUSD(mio)}</div></div>
+                <div className="goal-top" style={{alignItems:'baseline',gap:12}}><div className="goal-name" style={{whiteSpace:'nowrap'}}>{c.name}</div><div className="goal-pct" style={{whiteSpace:'nowrap'}}>{fUSD(mio)}</div></div>
+                <div className="goal-target" style={{whiteSpace:'nowrap'}}>Familia {fUSD(fam)} · total {fUSD(mio+fam)}</div>
               </div>
             ); })}
           </div>
