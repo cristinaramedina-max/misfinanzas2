@@ -2623,7 +2623,7 @@ function StatsTab({ year, month, rate }) {
         type:'doughnut',
         data:{labels:tdcE.map(([c,v])=>`${c}   ${fARS(v)} · ${tdcTotal>0?Math.round(v/tdcTotal*100):0}%`),datasets:[{data:tdcE.map(([,v])=>v),backgroundColor:tdcE.map((_,i)=>tdcColors[i%tdcColors.length]),borderWidth:3,borderColor:'#fff'}]},
         options:{plugins:{
-          legend:{position:'bottom',labels:{color:'#3a2a50',font:{family:'Outfit',size:12,weight:'600'},padding:12,boxWidth:14}},
+          legend:{position:'right',labels:{color:'#3a2a50',font:{family:'Outfit',size:12,weight:'600'},padding:14}},
           tooltip:{callbacks:{label:c=>' '+tdcE[c.dataIndex][0]+': '+fARS(c.raw)}}
         },cutout:'50%',layout:{padding:8}},
         plugins:[{
