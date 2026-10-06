@@ -1243,7 +1243,7 @@ function ResumenTab({ year, month, rate }) {
   const barColor = libreUsedPct>=100?'var(--red)':libreUsedPct>=80?'var(--gold)':'var(--teal)';
 
   const incUSD = tx.filter(t=>t.type==='income'&&t.currency==='USD').reduce((a,t)=>a+t.amount,0);
-  const expUSD = tx.filter(t=>t.type==='expense'&&t.currency==='USD').reduce((a,t)=>a+t.amount,0);
+  const expUSD = tx.filter(t=>t.type==='expense'&&t.currency==='USD'&&!t.fromGoal&&t.category!=='Ahorro').reduce((a,t)=>a+t.amount,0);
   const fijUSD = fx.filter(f=>f.currency==='USD').reduce((a,f)=>a+f.amount,0);
   const hasUSD = incUSD>0||expUSD>0||fijUSD>0;
   const fijUnpaid = fx.filter(f=>!f.paid).length;
