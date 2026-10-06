@@ -1317,28 +1317,37 @@ function ResumenTab({ year, month, rate }) {
         </div>
       )}
 
-      {(()=>{ const d=gAhorros(); return (
+      {(()=>{
+        const d = gAhorros();
+        const cuentas = d.cuentas.map(c=>({ c, mio:c.titulares.filter(t=>t.mio).reduce((a,t)=>a+t.amount,0)+aportesCuenta(d,c.id), fam:c.titulares.filter(t=>!t.mio).reduce((a,t)=>a+t.amount,0) }));
+        const totMio = cuentas.reduce((a,x)=>a+x.mio,0), totFam = cuentas.reduce((a,x)=>a+x.fam,0);
+        return (
         <>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-            <div className="sec-title">Mis ahorros</div>
-            <button className="meta-btn" style={{border:'1.5px solid var(--border)',padding:'6px 14px'}} onClick={()=>window.dispatchEvent(new CustomEvent('ir-a-ahorros'))}>🏦 Ir a ahorros →</button>
+          <div className="sec-title">Mis ahorros</div>
+          {/* Total: lo principal */}
+          <div className="total-ahorros-card" style={{marginBottom:12}}>
+            <div style={{flex:1}}>
+              <div className="ta-label">Total ahorros</div>
+              <div className="ta-val">{fUSD(totMio)}</div>
+              <div className="ta-sub">Además hay {fUSD(totFam)} de la familia (total en cuentas {fUSD(totMio+totFam)})</div>
+            </div>
+            <button onClick={()=>window.dispatchEvent(new CustomEvent('ir-a-ahorros'))}
+              style={{background:'rgba(255,255,255,0.22)',border:'1.5px solid rgba(255,255,255,0.5)',borderRadius:8,color:'white',cursor:'pointer',padding:'8px 14px',fontSize:13,fontFamily:'var(--font)',fontWeight:800,whiteSpace:'nowrap',alignSelf:'center'}}>
+              🏦 Ir a ahorros →
+            </button>
           </div>
+          {/* División por cuenta */}
           <div className="goals-grid">
-            {d.cuentas.map(c=>{ const ap=aportesCuenta(d,c.id); const mio=c.titulares.filter(t=>t.mio).reduce((a,t)=>a+t.amount,0)+ap; const fam=c.titulares.filter(t=>!t.mio).reduce((a,t)=>a+t.amount,0); return (
+            {cuentas.map(({c,mio,fam})=>(
               <div key={c.id} className="goal-card">
-                <div className="goal-top" style={{alignItems:'baseline',gap:12}}><div className="goal-name" style={{whiteSpace:'nowrap'}}>{c.name}</div><div className="goal-pct" style={{whiteSpace:'nowrap'}}>{fUSD(mio)}</div></div>
+                <div className="goal-top" style={{alignItems:'baseline',gap:12}}><div className="goal-name" style={{whiteSpace:'nowrap'}}>{c.name}</div><div className="goal-pct" style={{whiteSpace:'nowrap',fontSize:18}}>{fUSD(mio)}</div></div>
                 <div className="goal-target" style={{whiteSpace:'nowrap'}}>Familia {fUSD(fam)} · total {fUSD(mio+fam)}</div>
               </div>
-            ); })}
-            {(()=>{ const t=d.cuentas.reduce((acc,c)=>{ const mio=c.titulares.filter(x=>x.mio).reduce((a,x)=>a+x.amount,0)+aportesCuenta(d,c.id); const fam=c.titulares.filter(x=>!x.mio).reduce((a,x)=>a+x.amount,0); return {mio:acc.mio+mio,fam:acc.fam+fam}; },{mio:0,fam:0}); return (
-              <div className="goal-card" style={{borderColor:'var(--purple)',background:'var(--surface2)'}}>
-                <div className="goal-top" style={{alignItems:'baseline',gap:12}}><div className="goal-name" style={{whiteSpace:'nowrap'}}>Total ahorros</div><div className="goal-pct" style={{whiteSpace:'nowrap'}}>{fUSD(t.mio)}</div></div>
-                <div className="goal-target" style={{whiteSpace:'nowrap'}}>Familia {fUSD(t.fam)} · total {fUSD(t.mio+t.fam)}</div>
-              </div>
-            ); })()}
+            ))}
           </div>
         </>
-      ); })()}
+        );
+      })()}
     </div>
   );
 }
