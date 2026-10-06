@@ -1327,6 +1327,12 @@ function ResumenTab({ year, month, rate }) {
                 <div className="goal-target" style={{whiteSpace:'nowrap'}}>Familia {fUSD(fam)} · total {fUSD(mio+fam)}</div>
               </div>
             ); })}
+            {(()=>{ const t=d.cuentas.reduce((acc,c)=>{ const mio=c.titulares.filter(x=>x.mio).reduce((a,x)=>a+x.amount,0)+aportesCuenta(d,c.id); const fam=c.titulares.filter(x=>!x.mio).reduce((a,x)=>a+x.amount,0); return {mio:acc.mio+mio,fam:acc.fam+fam}; },{mio:0,fam:0}); return (
+              <div className="goal-card" style={{borderColor:'var(--purple)',background:'var(--surface2)'}}>
+                <div className="goal-top" style={{alignItems:'baseline',gap:12}}><div className="goal-name" style={{whiteSpace:'nowrap'}}>Total ahorros</div><div className="goal-pct" style={{whiteSpace:'nowrap'}}>{fUSD(t.mio)}</div></div>
+                <div className="goal-target" style={{whiteSpace:'nowrap'}}>Familia {fUSD(t.fam)} · total {fUSD(t.mio+t.fam)}</div>
+              </div>
+            ); })()}
           </div>
         </>
       ); })()}
