@@ -2343,15 +2343,33 @@ const SUBS_SEED = [
   ['Suscripción','Google',1.99,'USD','Galicia'],
   ['Suscripción','Netflix',16.96,'USD','Galicia'],
   ['Servicio','Personal - consumo/débito',109232.41,'ARS','Santander'],
-  ['Servicio','Personal - cuota 3 de 6',32775.68,'ARS','Santander'],
   ['Servicio','Claro',22659.98,'ARS','Santander'],
   ['Servicio','Personal extra',80000,'ARS','Agregado por vos'],
   ['Servicio','Flow',80200,'ARS','Tablero actual'],
 ];
+const CUOTAS_SEED = [
+  ['Personal',32775.68,'Santander · cuota 3/6 en sep-26 · última Dic-2026'],
+  ['MercadoLibre',10255.68,'Santander · cuota 2/6 en sep-26 · última Ene-2027'],
+  ['Farmacity',46693.1,'Santander · cuota 2/3 en sep-26 · última Oct-2026'],
+  ['Electrónica FL',130000.02,'Santander · cuota 1/18 en sep-26 · última Feb-2028'],
+  ['Perla Shop',25016.68,'Santander · cuota 1/3 en sep-26 · última Nov-2026'],
+  ['Hanesbrands',34716.99,'Santander · cuota 1/2 en sep-26 · última Oct-2026'],
+  ['Grimoldi',16445.55,'Naranja · cuota 5/9 en sep-26 · última Ene-2027'],
+  ['Trendy Deals',49075.08,'Galicia · cuota 13/18 en sep-26 · última Feb-2027'],
+  ['BGH',67777,'Tarjeta no indicada · cuota 14/18 en sep-26 · última Ene-2027'],
+].map(([name,amount,note])=>['Cuota',name,amount,'ARS',note]);
+const subsFromSeed = seed => seed.map(([tipo,name,amount,currency,note])=>({id:uid(),tipo,name,amount,currency,note}));
 const gSubs = () => {
   const raw = ls.getItem('mf_subs');
-  if(raw===null) return SUBS_SEED.map(([tipo,name,amount,currency,note])=>({id:uid(),tipo,name,amount,currency,note}));
-  try { return JSON.parse(raw)||[]; } catch { return []; }
+  if(raw===null) return subsFromSeed([...SUBS_SEED,...CUOTAS_SEED]);
+  let d; try { d = JSON.parse(raw)||[]; } catch { return []; }
+  // Carga única de cuotas en tablas ya existentes (la cuota de Personal pasa de Servicio a Cuota)
+  if(!ls.getItem('mf_subs_cuotas_v1')) {
+    d = [...d.filter(i=>i.name!=='Personal - cuota 3 de 6'), ...subsFromSeed(CUOTAS_SEED)];
+    ls.setItem('mf_subs', JSON.stringify(d));
+    ls.setItem('mf_subs_cuotas_v1','1');
+  }
+  return d;
 };
 const sSubs = d => { pushUndo(); ls.setItem('mf_subs', JSON.stringify(d)); notify(); };
 
@@ -2359,7 +2377,7 @@ function SubsTable({ rate }) {
   const [items, setItems] = useState(gSubs);
   const [filtro, setFiltro] = useState('all');
   const [form, setForm] = useState({tipo:'Suscripción',name:'',amount:'',currency:'ARS',note:''});
-  useEffect(()=>{ if(ls.getItem('mf_subs')===null) ls.setItem('mf_subs', JSON.stringify(items)); },[]);
+  useEffect(()=>{ if(ls.getItem('mf_subs')===null) { ls.setItem('mf_subs', JSON.stringify(items)); ls.setItem('mf_subs_cuotas_v1','1'); } },[]);
 
   const save = d => { sSubs(d); setItems(d); };
   const add = () => {
