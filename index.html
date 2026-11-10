@@ -491,6 +491,25 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font); min-h
 .logo-name { font-size: 19px; font-weight: 900; letter-spacing: -0.4px; color: var(--ink); }
 .logo-name em { font-style: normal; color: var(--purple-dark); }
 .logo-tag { font-size: 10px; color: var(--ink2); opacity: .55; margin-top: 2px; letter-spacing: 0.3px; font-weight: 500; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sync-btn { background: none; border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; font-family: var(--font); cursor: pointer; color: var(--ink2); display: flex; align-items: center; gap: 4px; transition: all .15s; white-space: nowrap; }
+.sync-btn:hover { background: var(--purple-light); border-color: var(--purple); color: var(--purple-dark); }
+.sync-btn .sync-icon { display: inline-block; }
+.sync-btn.syncing .sync-icon { animation: spin .8s linear infinite; }
+.sync-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.sync-modal { background: white; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.sync-modal h3 { margin: 0 0 6px; font-size: 17px; font-weight: 800; color: var(--ink); }
+.sync-modal p { margin: 0 0 16px; font-size: 13px; color: var(--ink2); line-height: 1.5; }
+.sync-modal input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; font-family: var(--font); margin-bottom: 12px; }
+.sync-modal input:focus { outline: none; border-color: var(--purple); }
+.sync-modal .sync-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.sync-modal .btn-secondary { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 13px; font-family: var(--font); cursor: pointer; color: var(--ink2); }
+.sync-modal .btn-primary { background: var(--purple); border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-family: var(--font); cursor: pointer; color: white; font-weight: 600; }
+.sync-modal .sync-status-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); margin-bottom: 12px; padding: 8px 10px; background: var(--purple-light); border-radius: 8px; }
+.sync-steps { margin: 0 0 16px; padding: 0; list-style: none; counter-reset: steps; }
+.sync-steps li { counter-increment: steps; padding: 5px 0 5px 28px; position: relative; font-size: 12px; color: var(--ink2); line-height: 1.5; }
+.sync-steps li::before { content: counter(steps); position: absolute; left: 0; top: 4px; width: 18px; height: 18px; background: var(--purple); color: white; border-radius: 50%; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sync-steps a { color: var(--purple-dark); }
 
 .month-nav { margin: 6px 12px 10px; background: rgba(255,255,255,0.6); border-radius: var(--r-sm); padding: 7px 10px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.88); }
 .month-nav button { background: white; border: 1px solid var(--border); color: var(--ink2); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; font-family: var(--font); }
@@ -846,6 +865,10 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font); min-h
 </style>
 </head>
 <body>
+<div id="gh-loader" style="display:none;position:fixed;inset:0;background:var(--bg,#f5eef9);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:'Outfit',sans-serif;">
+  <div style="font-size:32px;animation:spin 1s linear infinite">☁️</div>
+  <div style="color:#7c3aed;font-weight:600;font-size:14px;">Sincronizando datos…</div>
+</div>
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
@@ -872,6 +895,96 @@ const ls = (() => {
 const notify = () => window.dispatchEvent(new Event('data-updated'));
 // Si otra pestaña cambia los datos, refrescar esta para no guardar encima datos viejos
 window.addEventListener('storage', e => { if(!e.key || e.key.startsWith('mf_')) notify(); });
+
+/* ── GITHUB GIST SYNC ── */
+const GH_GIST_DESC = 'misfinanzas-sync-data';
+const GH_GIST_FILE = 'misfinanzas-data.json';
+let _ghSyncStatus = 'idle'; // idle | syncing | ok | error
+let _ghSyncTimer  = null;
+const _lsSet = ls.setItem.bind(ls);
+
+function ghSetSyncStatus(s) {
+  _ghSyncStatus = s;
+  window.dispatchEvent(new CustomEvent('gh-sync-status', { detail: s }));
+}
+
+async function ghSave() {
+  const token = ls.getItem('mf_gh_token');
+  if(!token) return;
+  ghSetSyncStatus('syncing');
+  try {
+    const data = {};
+    for(let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if(k && k.startsWith('mf_') && k !== 'mf_gh_token' && k !== 'mf_gh_gist_id') data[k] = ls.getItem(k);
+    }
+    const content = JSON.stringify(data, null, 2);
+    let gistId = ls.getItem('mf_gh_gist_id');
+    const headers = { Authorization: `token ${token}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' };
+    if(!gistId) {
+      // Buscar gist existente
+      const listRes = await fetch('https://api.github.com/gists?per_page=100', { headers });
+      if(listRes.ok) {
+        const gists = await listRes.json();
+        const found = gists.find(g => g.description === GH_GIST_DESC && g.files[GH_GIST_FILE]);
+        if(found) { gistId = found.id; _lsSet('mf_gh_gist_id', gistId); }
+      }
+    }
+    if(!gistId) {
+      const res = await fetch('https://api.github.com/gists', {
+        method: 'POST', headers,
+        body: JSON.stringify({ description: GH_GIST_DESC, public: false, files: { [GH_GIST_FILE]: { content } } })
+      });
+      if(!res.ok) throw new Error('create failed');
+      const gist = await res.json();
+      _lsSet('mf_gh_gist_id', gist.id);
+    } else {
+      const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ files: { [GH_GIST_FILE]: { content } } })
+      });
+      if(!res.ok) throw new Error('patch failed');
+    }
+    ghSetSyncStatus('ok');
+    setTimeout(() => { if(_ghSyncStatus==='ok') ghSetSyncStatus('idle'); }, 3000);
+  } catch(e) {
+    ghSetSyncStatus('error');
+  }
+}
+
+async function ghLoad() {
+  const token = ls.getItem('mf_gh_token');
+  if(!token) return false;
+  try {
+    const headers = { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' };
+    let gistId = ls.getItem('mf_gh_gist_id');
+    if(!gistId) {
+      const listRes = await fetch('https://api.github.com/gists?per_page=100', { headers });
+      if(!listRes.ok) return false;
+      const gists = await listRes.json();
+      const found = gists.find(g => g.description === GH_GIST_DESC && g.files[GH_GIST_FILE]);
+      if(!found) return false;
+      gistId = found.id; _lsSet('mf_gh_gist_id', gistId);
+    }
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
+    if(!res.ok) return false;
+    const gist = await res.json();
+    const raw = gist.files[GH_GIST_FILE]?.content;
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    Object.entries(data).forEach(([k,v]) => _lsSet(k, v));
+    return true;
+  } catch(e) { return false; }
+}
+
+// Interceptar ls.setItem para auto-sync
+ls.setItem = function(key, val) {
+  _lsSet(key, val);
+  if(key && key.startsWith('mf_') && key !== 'mf_gh_token' && key !== 'mf_gh_gist_id') {
+    clearTimeout(_ghSyncTimer);
+    _ghSyncTimer = setTimeout(ghSave, 2000);
+  }
+};
 
 // ── PRELOAD DATA ──
 (function() {
@@ -1180,6 +1293,7 @@ function Sidebar({ tab, setTab, year, month, onPrev, onNext, rate, setRate }) {
       <div className="logo">
         <div className="logo-name">Mis <em>Finanzas</em></div>
         <div className="logo-tag">control personal · ARS</div>
+        <CloudSyncButton />
       </div>
       <div className="month-nav">
         <button onClick={onPrev}>‹</button>
@@ -2808,6 +2922,101 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "sidebarGradient": true
 }/*EDITMODE-END*/;
 
+/* ── CLOUD SYNC UI ── */
+function CloudSyncModal({ onClose }) {
+  const [token, setToken] = React.useState('');
+  const [status, setStatus] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const connected = !!ls.getItem('mf_gh_token');
+
+  const handleConnect = async () => {
+    if(!token.trim()) return;
+    setLoading(true); setStatus('');
+    _lsSet('mf_gh_token', token.trim());
+    _lsSet('mf_gh_gist_id', '');
+    const ok = await new Promise(async res => {
+      try {
+        const r = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${token.trim()}`, Accept: 'application/vnd.github+json' }
+        });
+        res(r.ok);
+      } catch { res(false); }
+    });
+    if(!ok) { _lsSet('mf_gh_token',''); setStatus('❌ Token inválido. Revisá que tenga scope "gist".'); setLoading(false); return; }
+    await ghSave();
+    setStatus('✅ Conectado. Tus datos se sincronizan automáticamente.');
+    setLoading(false);
+  };
+
+  const handleDisconnect = () => {
+    _lsSet('mf_gh_token',''); _lsSet('mf_gh_gist_id','');
+    onClose();
+  };
+
+  return (
+    <div className="sync-modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="sync-modal">
+        <h3>☁️ Sync con GitHub</h3>
+        {connected ? (
+          <>
+            <div className="sync-status-row">✅ <span>Conectado — tus datos se guardan automáticamente en un Gist privado.</span></div>
+            <p style={{fontSize:12,color:'var(--ink2)'}}>Gist ID: <code style={{fontSize:11}}>{ls.getItem('mf_gh_gist_id')||'(buscando…)'}</code></p>
+            <div className="sync-actions">
+              <button className="btn-secondary" onClick={handleDisconnect}>Desconectar</button>
+              <button className="btn-primary" onClick={onClose}>Cerrar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>Guardá tus datos en la nube (Gist privado de GitHub). Funciona en cualquier dispositivo con el mismo token.</p>
+            <ol className="sync-steps">
+              <li>Ir a <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a></li>
+              <li>Nombre: <strong>misfinanzas-sync</strong></li>
+              <li>Scope: tildar solo <strong>gist</strong></li>
+              <li>Generar y copiar el token</li>
+            </ol>
+            <input
+              type="password"
+              placeholder="ghp_xxxxxxxxxxxx"
+              value={token}
+              onChange={e=>setToken(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&handleConnect()}
+            />
+            {status && <p style={{fontSize:12,margin:'0 0 12px',color:status.startsWith('✅')?'green':'crimson'}}>{status}</p>}
+            <div className="sync-actions">
+              <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+              <button className="btn-primary" onClick={handleConnect} disabled={loading||!token.trim()}>
+                {loading ? 'Conectando…' : 'Conectar'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CloudSyncButton() {
+  const [syncStatus, setSyncStatus] = React.useState(_ghSyncStatus);
+  const [showModal, setShowModal] = React.useState(false);
+  React.useEffect(() => {
+    const h = e => setSyncStatus(e.detail);
+    window.addEventListener('gh-sync-status', h);
+    return () => window.removeEventListener('gh-sync-status', h);
+  }, []);
+  const connected = !!ls.getItem('mf_gh_token');
+  const icon = syncStatus==='syncing' ? '🔄' : syncStatus==='ok' ? '✅' : syncStatus==='error' ? '❌' : connected ? '☁️' : '☁️';
+  const label = syncStatus==='syncing' ? 'Guardando…' : syncStatus==='ok' ? 'Guardado' : syncStatus==='error' ? 'Error sync' : connected ? 'Sync ON' : 'Sync';
+  return (
+    <>
+      <button className={`sync-btn${syncStatus==='syncing'?' syncing':''}`} onClick={()=>setShowModal(true)} title="Sincronización con GitHub">
+        <span className="sync-icon">{icon}</span>{label}
+      </button>
+      {showModal && <CloudSyncModal onClose={()=>setShowModal(false)} />}
+    </>
+  );
+}
+
 function App() {
   const now = new Date();
   const [tab,   setTab]   = useState('overview');
@@ -2938,7 +3147,15 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+(async () => {
+  const loader = document.getElementById('gh-loader');
+  if(ls.getItem('mf_gh_token')) {
+    if(loader) loader.style.display = 'flex';
+    await ghLoad();
+    if(loader) loader.style.display = 'none';
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+})();
 </script>
 <script>
 // ── PWA MANIFEST (inline) ──
