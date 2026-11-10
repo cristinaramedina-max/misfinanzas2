@@ -2953,6 +2953,14 @@ function CloudSyncModal({ onClose }) {
     onClose();
   };
 
+  const handlePull = async () => {
+    setLoading(true); setStatus('');
+    const ok = await ghLoad();
+    if(ok) { notify(); setStatus('✅ Datos descargados desde la nube.'); }
+    else { setStatus('❌ No se pudo descargar. Revisá la conexión o el token.'); }
+    setLoading(false);
+  };
+
   return (
     <div className="sync-modal-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
       <div className="sync-modal">
@@ -2960,12 +2968,13 @@ function CloudSyncModal({ onClose }) {
         {connected ? (
           <>
             <div className="sync-status-row">✅ <span>Conectado — tus datos se guardan automáticamente en un Gist privado.</span></div>
-            <p style={{fontSize:12,color:'var(--ink2)'}}>Gist ID: <code style={{fontSize:11}}>{ls.getItem('mf_gh_gist_id')||'(buscando…)'}</code></p>
-            <div className="sync-actions">
+            {status && <p style={{fontSize:12,margin:'0 0 12px',color:status.startsWith('✅')?'green':'crimson'}}>{status}</p>}
+            <div className="sync-actions" style={{flexWrap:'wrap'}}>
               <button className="btn-secondary" onClick={handleDisconnect}>Desconectar</button>
+              <button className="btn-secondary" onClick={handlePull} disabled={loading}>⬇️ {loading?'Descargando…':'Descargar nube'}</button>
               <button className="btn-primary" onClick={onClose}>Cerrar</button>
             </div>
-          </>
+</>
         ) : (
           <>
             <p>Guardá tus datos en la nube (Gist privado de GitHub). Funciona en cualquier dispositivo con el mismo token.</p>
