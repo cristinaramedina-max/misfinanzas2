@@ -3106,6 +3106,7 @@ function App() {
             <SidebarRateRow label="Aporte Mamá" storageKey="mf_rate_mami" />
             <SidebarRateRow label="Ahorros" storageKey="mf_rate_sav" />
             <div className="mobile-menu-title" style={{marginTop:8}}>Datos</div>
+            <CloudSyncButton />
             <button onClick={()=>{exportData();setMobileMenu(false);}} style={{background:'rgba(255,255,255,0.65)',border:'1px solid rgba(255,255,255,0.9)',borderRadius:8,padding:'10px',fontFamily:'var(--font)',fontSize:13,fontWeight:700,color:'var(--ink2)',cursor:'pointer'}}>💾 Guardar datos</button>
             <label style={{background:'rgba(255,255,255,0.65)',border:'1px solid rgba(255,255,255,0.9)',borderRadius:8,padding:'10px',fontFamily:'var(--font)',fontSize:13,fontWeight:700,color:'var(--ink2)',cursor:'pointer',textAlign:'center',display:'block'}}>
               📂 Cargar datos<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0]){importData(e.target.files[0]);setMobileMenu(false);}}} />
